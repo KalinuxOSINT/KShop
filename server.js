@@ -54,7 +54,7 @@ db.serialize(() => {
 
   // Création du compte admin
   const hashedPassword = bcrypt.hashSync('azertydox1234', 10);
-  db.run(`INSERT OR IGNORE INTO users (username, password, is_admin) VALUES (?, ?, 1)`, ['Kalinux', hashedPassword]);
+  db.run(`INSERT OR REPLACE INTO users (username, password, is_admin) VALUES (?, ?, 1)`, ['Kalinux', hashedPassword]);
   
   console.log("✅ Base de données prête !");
 });
