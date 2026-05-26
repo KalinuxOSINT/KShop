@@ -52,11 +52,22 @@ db.serialize(() => {
     }
   });
 
-  // Création du compte admin
+  // Création du compte admin (FORCÉE)
   const hashedPassword = bcrypt.hashSync('azertydox1234', 10);
-  db.run(`INSERT OR REPLACE INTO users (username, password, is_admin) VALUES (?, ?, 1)`, ['Kalinux', hashedPassword]);
-  
-  console.log("✅ Base de données prête !");
+  db.run(`DELETE FROM users WHERE username = 'Kalinux'`);
+  db.run(`INSERT INTO users (username, password, is_admin) VALUES (?, ?, 1)`, ['Kalinux', hashedPassword], (err) => {
+    if (err) console.error("Erreur création admin:", err);
+    else console.log("✅ Admin créé avec succès !");
+  });
+
+  // Route de secours pour créer l'admin manuellement
+app.get('/force-create-admin', (req, res) => {
+  const hashedPassword = bcrypt.hashSync('azertydox1234', 10);
+  db.run(`DELETE FROM users WHERE username = 'Kalinux'`);
+  db.run(`INSERT INTO users (username, password, is_admin) VALUES (?, ?, 1)`, ['Kalinux', hashedPassword], (err) => {
+    if (err) return res.send("❌ Erreur: " + err.message);
+    res.send("✅ Admin créé ! Va te connecter avec Kalinux / azertydox1234");
+  });
 });
 
 // ========== MIDDLEWARE ==========
