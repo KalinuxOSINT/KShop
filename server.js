@@ -1,46 +1,110 @@
+require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
 const bcrypt = require('bcrypt');
+const sqlite3 = require('sqlite3').verbose();
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-// Middleware
+// ========== BASE DE DONNÉES ==========
+const db = new sqlite3.Database('./database.sqlite');
+
+// Création des tables et de l'admin en synchrone
+db.serialize(() => {
+  // Table users
+  db.run(`CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE,
+    password TEXT,
+    is_admin INTEGER DEFAULT 0
+  )`);
+
+  // Table products
+  db.run(`CREATE TABLE IF NOT EXISTS products (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT,
+    description TEXT,
+    price INTEGER,
+    category TEXT
+  )`);
+
+  // Ajout des produits par défaut
+  db.get(`SELECT COUNT(*) as count FROM products`, (err, row) => {
+    if (!err && row && row.count === 0) {
+      db.run(`INSERT INTO products (name, description, price, category) VALUES 
+        ('AIM GOD++', 'Aimbot + triggerbot + no recoil', 2499, 'FPS'),
+        ('ESP Vision Pro', 'Wallhack + boxes + distance', 1999, 'FPS'),
+        ('Auto-Farm Godmode', 'XP et loot automatique', 2999, 'RPG')
+      `);
+    }
+  });
+
+  // Création admin - méthode plus fiable
+  const adminPassword = bcrypt.hashSync('azertydox1234', 10);
+  db.run(`INSERT OR REPLACE INTO users (id, username, password, is_admin) VALUES (1, 'Kalinux', ?, 1)`, [adminPassword], (err) => {
+    if (err) console.error("Erreur admin:", err);
+    else console.log("✅ Admin Kalinux prêt");
+  });
+});
+
+// ========== MIDDLEWARE ==========
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(session({ secret: 'secret', resave: false, saveUninitialized: true }));
+app.use(express.static('public'));
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'secret123',
+  resave: false,
+  saveUninitialized: true,
+  cookie: { maxAge: 24 * 60 * 60 * 1000 }
+}));
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
 
-// Utilisateurs fictifs (pour test)
-const users = [
-  { username: 'Kalinux', password: bcrypt.hashSync('azertydox1234', 10), is_admin: true }
-];
+// Fonctions middleware
+function requireAuth(req, res, next) {
+  if (!req.session.userId) return res.redirect('/login');
+  next();
+}
 
-// Routes
+function requireAdmin(req, res, next) {
+  if (!req.session.userId) return res.redirect('/login');
+  db.get(`SELECT is_admin FROM users WHERE id = ?`, [req.session.userId], (err, row) => {
+    if (err || !row || !row.is_admin) return res.status(403).send('🔒 Accès admin refusé');
+    next();
+  });
+}
+
+// ========== ROUTES ==========
 app.get('/', (req, res) => {
-  res.send(`
-    <h1>🔐 Bienvenue sur KalinuxShop</h1>
-    ${req.session.user ? `<p>Connecté en tant que <strong>${req.session.user.username}</strong> | <a href="/logout">Déconnexion</a></p>` : '<a href="/login">Connexion</a>'}
-    ${req.session.user && req.session.user.is_admin ? '<p><a href="/admin">📁 Panel Admin</a></p>' : ''}
-  `);
+  db.all(`SELECT * FROM products`, (err, products) => {
+    res.render('index', { user: req.session.user, products: products || [] });
+  });
 });
 
-app.get('/login', (req, res) => {
-  res.send(`
-    <form method="post">
-      <input name="username" placeholder="Nom d'utilisateur" required><br>
-      <input type="password" name="password" placeholder="Mot de passe" required><br>
-      <button type="submit">Se connecter</button>
-    </form>
-  `);
-});
+app.get('/login', (req, res) => { res.render('login'); });
+app.get('/register', (req, res) => { res.render('register'); });
 
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
-  const user = users.find(u => u.username === username);
-  if (user && bcrypt.compareSync(password, user.password)) {
-    req.session.user = { username: user.username, is_admin: user.is_admin };
-    return res.redirect('/');
-  }
-  res.send('❌ Identifiants invalides. <a href="/login">Réessayer</a>');
+  db.get(`SELECT * FROM users WHERE username = ?`, [username], async (err, user) => {
+    if (!user || !(await bcrypt.compare(password, user.password))) {
+      return res.send('❌ Identifiants invalides. <a href="/login">Réessayer</a>');
+    }
+    req.session.userId = user.id;
+    req.session.user = { id: user.id, username: user.username, is_admin: user.is_admin };
+    res.redirect(user.is_admin ? '/admin' : '/account');
+  });
+});
+
+app.post('/register', async (req, res) => {
+  const { username, password } = req.body;
+  const hashedPassword = await bcrypt.hash(password, 10);
+  db.run(`INSERT INTO users (username, password, is_admin) VALUES (?, ?, 0)`, [username, hashedPassword], (err) => {
+    if (err) return res.send('❌ Nom déjà pris. <a href="/register">Réessayer</a>');
+    res.redirect('/login');
+  });
 });
 
 app.get('/logout', (req, res) => {
@@ -48,12 +112,31 @@ app.get('/logout', (req, res) => {
   res.redirect('/');
 });
 
-app.get('/admin', (req, res) => {
-  if (!req.session.user || !req.session.user.is_admin) return res.status(403).send('⛔ Accès refusé');
-  res.send('<h1>👑 Panel Admin</h1><p>Bienvenue, maître. Les cheats sont prêts.</p><a href="/">Retour</a>');
+app.get('/account', requireAuth, (req, res) => {
+  res.render('account', { user: req.session.user });
+});
+
+app.get('/admin', requireAdmin, (req, res) => {
+  db.all(`SELECT * FROM products`, (err, products) => {
+    res.render('admin', { products: products || [] });
+  });
+});
+
+app.post('/admin/products/add', requireAdmin, (req, res) => {
+  const { name, description, price, category } = req.body;
+  db.run(`INSERT INTO products (name, description, price, category) VALUES (?, ?, ?, ?)`,
+    [name, description, parseInt(price), category], () => {
+    res.redirect('/admin');
+  });
+});
+
+app.post('/admin/products/delete/:id', requireAdmin, (req, res) => {
+  db.run(`DELETE FROM products WHERE id = ?`, [req.params.id], () => {
+    res.redirect('/admin');
+  });
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ Serveur admin fonctionnel sur http://0.0.0.0:${PORT}`);
-  console.log(`👑 Admin : Kalinux / azertydox1234`);
+  console.log(`🔥 Serveur sur http://0.0.0.0:${PORT}`);
+  console.log(`👑 Admin: Kalinux / azertydox1234`);
 });
