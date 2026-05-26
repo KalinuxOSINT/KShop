@@ -1,0 +1,33 @@
+body {
+  background: #0a0c12;
+  color: #eee;
+  font-family: monospace;
+  padding: 2rem;
+}
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.products {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+.card {
+  background: #11141f;
+  border: 1px solid #00ffcc;
+  border-radius: 1rem;
+  padding: 1rem;
+  width: 250px;
+}
+a, button {
+  background: #00ffcc;
+  color: black;
+  padding: 0.5rem 1rem;
+  border-radius: 2rem;
+  text-decoration: none;
+  display: inline-block;
+  margin-top: 0.5rem;
+  border: none;
+  cursor: pointer;
+}

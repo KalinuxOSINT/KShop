@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head><title>Admin</title><link rel="stylesheet" href="/style.css"></head>
+<body>
+<div class="container">
+  <h1>👑 Panel Admin</h1>
+  <a href="/logout">Déconnexion</a>
+  <h2>Ajouter un cheat</h2>
+  <form method="post" action="/admin/products/add">
+    <input name="name" placeholder="Nom" required>
+    <input name="description" placeholder="Description">
+    <input name="price" type="number" placeholder="Prix (centimes)" required>
+    <input name="category" placeholder="Catégorie">
+    <input name="file_url" placeholder="Lien du fichier">
+    <button type="submit">Ajouter</button>
+  </form>
+  <h2>Cheats existants</h2>
+  <% products.forEach(p => { %>
+    <div><%= p.name %> - <%= (p.price/100).toFixed(2) %>€
+      <form method="post" action="/admin/products/delete/<%= p.id %>" style="display:inline">
+        <button type="submit">❌</button>
+      </form>
+    </div>
+  <% }) %>
+  <h2>Ventes récentes</h2>
+  <% purchases.forEach(p => { %>
+    <div><%= p.username %> a acheté <%= p.name %> le <%= p.created_at %></div>
+  <% }) %>
+</div>
+</body>
+</html>

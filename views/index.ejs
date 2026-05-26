@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head><title>CheatShop</title><link rel="stylesheet" href="/style.css"></head>
+<body>
+<div class="container">
+  <h1>⚡ CHEATSHOP</h1>
+  <% if (user) { %>
+    <p>👋 Bonjour <%= user.username %> | <a href="/account">Mon compte</a> | <a href="/logout">Déconnexion</a></p>
+  <% } else { %>
+    <p><a href="/login">Connexion</a> | <a href="/register">Inscription</a></p>
+  <% } %>
+  <div class="products">
+    <% products.forEach(p => { %>
+      <div class="card">
+        <h3><%= p.name %></h3>
+        <p><%= p.description %></p>
+        <p class="price"><%= (p.price/100).toFixed(2) %> €</p>
+        <a href="/checkout/<%= p.id %>">Acheter</a>
+      </div>
+    <% }) %>
+  </div>
+</div>
+</body>
+</html>
