@@ -182,6 +182,10 @@ app.get('/debug-users', (req, res) => {
     res.send(html);
   });
 });
+// ========== KALI AI (admin only, version gratuite) ==========
+app.get('/kali-ai', requireAdmin, (req, res) => {
+    res.render('kali-ai');
+});
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🔥 Serveur sur http://0.0.0.0:${PORT}`);
   console.log(`👑 Admin: Kalinux / azertydox1234`);
