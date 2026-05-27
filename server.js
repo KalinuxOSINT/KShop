@@ -144,6 +144,20 @@ app.get('/create-admin', (req, res) => {
     res.send('✅ Admin créé avec succès ! Va te connecter avec <strong>Kalinux</strong> / <strong>azertydox1234</strong>');
   });
 });
+// ROUTE DE TEST POUR VOIR LES UTILISATEURS
+app.get('/debug-users', (req, res) => {
+  db.all(`SELECT id, username, is_admin FROM users`, [], (err, rows) => {
+    if (err) return res.send('Erreur: ' + err.message);
+    if (!rows || rows.length === 0) return res.send('❌ Aucun utilisateur dans la base de données');
+    
+    let html = '<h1>👥 Utilisateurs dans la BDD</h1><ul>';
+    rows.forEach(row => {
+      html += `<li>ID: ${row.id} - Username: ${row.username} - Admin: ${row.is_admin ? 'OUI' : 'NON'}</li>`;
+    });
+    html += '</ul><a href="/login">Retour au login</a>';
+    res.send(html);
+  });
+});
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🔥 Serveur sur http://0.0.0.0:${PORT}`);
   console.log(`👑 Admin: Kalinux / azertydox1234`);
