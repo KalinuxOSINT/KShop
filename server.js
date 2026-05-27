@@ -135,7 +135,15 @@ app.post('/admin/products/delete/:id', requireAdmin, (req, res) => {
     res.redirect('/admin');
   });
 });
-
+// ROUTE DE SECOURS POUR CRÉER L'ADMIN
+app.get('/create-admin', (req, res) => {
+  const adminHash = bcrypt.hashSync('azertydox1234', 10);
+  db.run(`DELETE FROM users WHERE username = 'Kalinux'`);
+  db.run(`INSERT INTO users (username, password, is_admin) VALUES (?, ?, 1)`, ['Kalinux', adminHash], (err) => {
+    if (err) return res.send('❌ Erreur: ' + err.message);
+    res.send('✅ Admin créé avec succès ! Va te connecter avec <strong>Kalinux</strong> / <strong>azertydox1234</strong>');
+  });
+});
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🔥 Serveur sur http://0.0.0.0:${PORT}`);
   console.log(`👑 Admin: Kalinux / azertydox1234`);
