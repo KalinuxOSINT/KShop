@@ -88,13 +88,37 @@ app.get('/register', (req, res) => { res.render('register'); });
 
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
+  console.log(`Tentative de connexion: ${username}`);
+  
   db.get(`SELECT * FROM users WHERE username = ?`, [username], async (err, user) => {
-    if (!user || !(await bcrypt.compare(password, user.password))) {
+    if (err) {
+      console.error("Erreur DB:", err);
+      return res.send('❌ Erreur technique');
+    }
+    
+    if (!user) {
+      console.log(`Utilisateur non trouvé: ${username}`);
       return res.send('❌ Identifiants invalides. <a href="/login">Réessayer</a>');
     }
+    
+    console.log(`Utilisateur trouvé: ${user.username}, Hash: ${user.password}`);
+    
+    const match = await bcrypt.compare(password, user.password);
+    console.log(`Comparaison mot de passe: ${match ? 'OK' : 'ÉCHEC'}`);
+    
+    if (!match) {
+      return res.send('❌ Mot de passe incorrect. <a href="/login">Réessayer</a>');
+    }
+    
+    // Succès !
     req.session.userId = user.id;
     req.session.user = { id: user.id, username: user.username, is_admin: user.is_admin };
-    res.redirect(user.is_admin ? '/admin' : '/account');
+    console.log(`Connexion réussie pour ${username}`);
+    
+    if (user.is_admin) {
+      return res.redirect('/admin');
+    }
+    res.redirect('/account');
   });
 });
 
