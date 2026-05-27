@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mon compte - KalinuxShop</title>
+    <style>
+        body {
+            background: #0a0c12;
+            color: #eee;
+            font-family: Arial, sans-serif;
+            padding: 2rem;
+            text-align: center;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #1a1f2e;
+            border-radius: 1rem;
+            padding: 2rem;
+        }
+        h1 { color: #00ffcc; }
+        a {
+            color: #00ffcc;
+            text-decoration: none;
+            margin: 0 1rem;
+        }
+        a:hover { text-decoration: underline; }
+        .info {
+            background: #2a2f3e;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin: 1rem 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>👤 Mon compte</h1>
+        <div class="info">
+            <p><strong>Pseudo :</strong> <%= user.username %></p>
+            <p><strong>Rôle :</strong> <% if (user.is_admin) { %>Administrateur<% } else { %>Utilisateur<% } %></p>
+        </div>
+        <p>
+            <a href="/">🏠 Accueil</a>
+            <% if (user.is_admin) { %>
+                <a href="/admin">👑 Admin</a>
+            <% } %>
+            <a href="/logout">🚪 Déconnexion</a>
+        </p>
+    </div>
+</body>
+</html>
