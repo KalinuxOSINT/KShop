@@ -1,24 +1,47 @@
 <!DOCTYPE html>
 <html>
-<head><title>CheatShop</title><link rel="stylesheet" href="/style.css"></head>
+<head>
+    <title>Kalinux - Cheats & Tools</title>
+    <style>
+        body { background: #0a0c12; color: #eee; font-family: Arial; padding: 2rem; text-align: center; }
+        .logo { width: 80px; height: auto; vertical-align: middle; margin-right: 15px; }
+        h1 { display: flex; align-items: center; justify-content: center; color: #00ffcc; }
+        .products { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+        .card { background: #1a1f2e; border-radius: 1rem; padding: 1rem; width: 220px; }
+        .price { color: #00ffcc; font-size: 1.5rem; }
+        a, button { background: #00ffcc; color: black; padding: 0.5rem 1rem; border-radius: 2rem; text-decoration: none; display: inline-block; margin: 0.5rem; border: none; cursor: pointer; }
+        .admin-btn { background: #ff4444; color: white; }
+    </style>
+</head>
 <body>
-<div class="container">
-  <h1>⚡ CHEATSHOP</h1>
-  <% if (user) { %>
-    <p>👋 Bonjour <%= user.username %> | <a href="/account">Mon compte</a> | <a href="/logout">Déconnexion</a></p>
-  <% } else { %>
-    <p><a href="/login">Connexion</a> | <a href="/register">Inscription</a></p>
-  <% } %>
-  <div class="products">
-    <% products.forEach(p => { %>
-      <div class="card">
-        <h3><%= p.name %></h3>
-        <p><%= p.description %></p>
-        <p class="price"><%= (p.price/100).toFixed(2) %> €</p>
-        <a href="/checkout/<%= p.id %>">Acheter</a>
-      </div>
-    <% }) %>
-  </div>
-</div>
+    <h1>
+        <img src="/Kalinux.png" alt="Kalinux Logo" class="logo" onerror="this.style.display='none'">
+        Kalinux
+    </h1>
+    <p>Cheats & Tools - Undetected | Lifetime | Instant Delivery</p>
+    
+    <% if (user) { %>
+        <p>👋 Bonjour <%= user.username %> | <a href="/account">Mon compte</a> | <a href="/logout">Déconnexion</a></p>
+        <% if (user.is_admin) { %><a href="/admin" class="admin-btn">👑 Admin</a><% } %>
+    <% } else { %>
+        <p><a href="/login">Connexion</a> | <a href="/register">Inscription</a></p>
+    <% } %>
+    
+    <div class="products">
+        <% products.forEach(p => { %>
+            <div class="card">
+                <h3><%= p.name %></h3>
+                <p><%= p.description %></p>
+                <div class="price"><%= (p.price/100).toFixed(2) %> €</div>
+                <button class="buy-btn" data-product="<%= p.name %>">🔥 Acheter</button>
+            </div>
+        <% }) %>
+    </div>
+
+    <script>
+        document.querySelectorAll('.buy-btn').forEach(btn => {
+            btn.addEventListener('click', () => alert('🛒 Démo: ' + btn.dataset.product + ' ajouté au panier.\nPaiement Stripe à venir.'));
+        });
+    </script>
 </body>
 </html>
