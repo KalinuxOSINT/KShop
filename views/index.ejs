@@ -5,15 +5,14 @@
     <style>
         body{background:#0a0c12;color:#eee;font-family:Arial;padding:2rem;}
         .container{max-width:800px;margin:0 auto;}
-        .post-card{background:#1a1f2e;border-radius:1rem;padding:1rem;margin-bottom:1rem;}
+        .post-card{background:#1a1f2e;border-radius:1rem;padding:1rem;margin-bottom:1rem;position:relative;}
         .nav{display:flex;gap:1rem;margin-bottom:2rem;flex-wrap:wrap;}
         .nav a{color:#00ffcc;text-decoration:none;}
         textarea{width:100%;padding:0.5rem;background:#1e2332;border:1px solid #00ffcc;color:white;border-radius:0.5rem;}
         button{background:#00ffcc;color:black;padding:0.5rem 1rem;border:none;border-radius:2rem;cursor:pointer;}
         .rank-badge{font-size:0.7rem;padding:0.1rem 0.4rem;border-radius:1rem;background:#2a2e3f;}
-        .banned-user{text-decoration:line-through;color:#ff4444;}
-        a.profile-link{text-decoration:none;color:#00ffcc;}
-        a.profile-link:hover{text-decoration:underline;}
+        .delete-btn{background:#ff4444;color:white;padding:0.2rem 0.5rem;font-size:0.7rem;border:none;border-radius:1rem;cursor:pointer;margin-left:0.5rem;}
+        .delete-btn:hover{background:#cc0000;}
         #unreadBadge{background:#ff4444;color:white;border-radius:50%;padding:0.1rem 0.4rem;font-size:0.7rem;margin-left:0.3rem;}
     </style>
 </head>
@@ -42,9 +41,9 @@
     <h2>📰 Fil d'actualité</h2>
     <div id="postsContainer">
         <% posts.forEach(post => { %>
-            <div class="post-card">
+            <div class="post-card" id="post-<%= post.id %>">
                 <div>
-                    <a href="/profile/<%= post.user_id %>" class="profile-link">
+                    <a href="/profile/<%= post.user_id %>" class="profile-link" style="color:#00ffcc; text-decoration:none;">
                         <strong><%= post.users.username %></strong>
                     </a>
                     <span class="rank-badge">
@@ -55,6 +54,9 @@
                         <% } else if (post.users.rank === 'banned') { %>🔒
                         <% } else { %>👤<% } %>
                     </span>
+                    <% if (user.is_admin || user.id === post.user_id) { %>
+                        <button class="delete-btn" onclick="deletePost(<%= post.id %>)">🗑️ Supprimer</button>
+                    <% } %>
                 </div>
                 <div style="font-size:0.8rem;"><%= new Date(post.created_at).toLocaleString() %></div>
                 <p><%= post.content %></p>
@@ -69,6 +71,20 @@
         const res = await fetch('/api/post', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({content}) });
         if (res.ok) location.reload();
         else alert('Erreur');
+    }
+
+    async function deletePost(postId) {
+        if (!confirm('Supprimer ce post ?')) return;
+        const res = await fetch('/api/post/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ postId })
+        });
+        if (res.ok) {
+            document.getElementById(`post-${postId}`).remove();
+        } else {
+            alert('Erreur lors de la suppression');
+        }
     }
 
     async function checkUnreadMessages() {
