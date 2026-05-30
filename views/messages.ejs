@@ -17,17 +17,22 @@
         textarea{width:100%;padding:0.5rem;background:#1e2332;border:1px solid #00ffcc;color:white;border-radius:0.5rem;}
         button{background:#00ffcc;color:black;padding:0.5rem 1rem;border:none;border-radius:2rem;cursor:pointer;}
         .nav a{color:#00ffcc;text-decoration:none;margin-right:1rem;}
-        .rank-badge{font-size:1.2rem;margin-right:0.3rem;}
-        .banned-user {
-            text-decoration: line-through;
-            color: #ff4444;
-        }
+        .rank-badge{font-size:1rem;margin-right:0.3rem;}
+        .banned-user{text-decoration:line-through;color:#ff4444;}
+        #unreadBadge{background:#ff4444;color:white;border-radius:50%;padding:0.1rem 0.4rem;font-size:0.7rem;margin-left:0.3rem;}
     </style>
 </head>
 <body>
 <div class="container">
     <div class="sidebar">
-        <div class="nav"><a href="/">← Retour</a></div>
+        <div class="nav">
+            <a href="/">← Retour</a>
+            <% if (user.is_admin) { %>
+                <a href="/admin/messages" id="adminMessagesLink" style="position:relative;">
+                    📩 Messages <span id="unreadBadge">0</span>
+                </a>
+            <% } %>
+        </div>
         <h3>💬 Conversations</h3>
         <div id="conversationsList">
             <% conversations.forEach(c => { %>
@@ -40,11 +45,9 @@
                         <% } else if (c.rank === 'banned') { %>🔒
                         <% } else { %>👤<% } %>
                     </span>
-                    <a href="/profile/<%= c.id %>" style="text-decoration: none; color: inherit;">
-    <strong class="<% if (c.rank === 'banned') { %>banned-user<% } %>">
-        <%= c.username %>
-    </strong>
-</a>
+                    <strong class="<% if (c.rank === 'banned') { %>banned-user<% } %>">
+                        <%= c.username %>
+                    </strong>
                     <% if (c.unread > 0) { %><span class="unread"><%= c.unread %></span><% } %>
                     <div style="font-size:0.7rem;"><%= c.last_message ? c.last_message.substring(0,50) : 'Nouvelle conversation' %></div>
                 </div>
@@ -66,15 +69,15 @@
         const res = await fetch('/api/messages/' + userId);
         const messages = await res.json();
         const container = document.getElementById('messagesContainer');
-container.innerHTML = messages.map(m => `
-    <div class="message ${m.sender_id == <%= user.id %> ? 'sent' : 'received'}">
-        <a href="/profile/${m.sender_id}" style="text-decoration: none; color: #00ffcc;">
-            <strong>${m.sender_id == <%= user.id %> ? 'Moi' : m.username}</strong>
-        </a><br>
-        ${escapeHtml(m.content)}<br>
-        <small>${new Date(m.created_at).toLocaleString()}</small>
-    </div>
-`).join('');
+        container.innerHTML = messages.map(m => `
+            <div class="message ${m.sender_id == <%= user.id %> ? 'sent' : 'received'}">
+                <a href="/profile/${m.sender_id}" style="text-decoration:none;color:#00ffcc;">
+                    <strong>${m.sender_id == <%= user.id %> ? 'Moi' : escapeHtml(m.username)}</strong>
+                </a><br>
+                ${escapeHtml(m.content)}<br>
+                <small>${new Date(m.created_at).toLocaleString()}</small>
+            </div>
+        `).join('');
         document.getElementById('chatHeader').innerHTML = `<h3>💬 Conversation</h3>`;
         container.scrollTop = container.scrollHeight;
     }
@@ -104,7 +107,22 @@ container.innerHTML = messages.map(m => `
         });
     }
     
+    async function checkUnreadMessages() {
+        <% if (user.is_admin) { %>
+            const res = await fetch('/api/admin/messages/unread-count');
+            const data = await res.json();
+            const badge = document.getElementById('unreadBadge');
+            if (badge) {
+                const count = data.count || 0;
+                badge.innerText = count;
+                badge.style.display = count > 0 ? 'inline' : 'none';
+            }
+        <% } %>
+    }
+    
     setInterval(() => { if(currentUserId) loadChat(currentUserId); }, 3000);
+    setInterval(checkUnreadMessages, 30000);
+    checkUnreadMessages();
 </script>
 </body>
 </html>
