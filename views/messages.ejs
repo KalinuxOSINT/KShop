@@ -13,12 +13,15 @@
         .message.received{background:#2a2e3f;}
         .conversation{padding:0.5rem;cursor:pointer;border-radius:0.5rem;margin-bottom:0.5rem;}
         .conversation:hover{background:#2a2e3f;}
-        .conversation.active{background:#00ffcc22;border-left:3px solid #00ffcc;}
         .unread{background:#ff4444;color:white;border-radius:1rem;padding:0.1rem 0.4rem;font-size:0.7rem;margin-left:0.5rem;}
         textarea{width:100%;padding:0.5rem;background:#1e2332;border:1px solid #00ffcc;color:white;border-radius:0.5rem;}
         button{background:#00ffcc;color:black;padding:0.5rem 1rem;border:none;border-radius:2rem;cursor:pointer;}
         .nav a{color:#00ffcc;text-decoration:none;margin-right:1rem;}
-        .rank-badge{font-size:1rem;margin-left:0.3rem;}
+        .rank-badge{font-size:1.2rem;margin-right:0.3rem;}
+        .banned-user {
+            text-decoration: line-through;
+            color: #ff4444;
+        }
     </style>
 </head>
 <body>
@@ -29,14 +32,17 @@
         <div id="conversationsList">
             <% conversations.forEach(c => { %>
                 <div class="conversation" onclick="loadChat(<%= c.id %>)" data-id="<%= c.id %>">
-                    <strong><%= c.username %></strong> <span class="rank-badge">
-<% if (c.rank === 'admin') { %>👑
-<% } else if (c.rank === 'vip') { %>⭐
-<% } else if (c.rank === 'premium') { %>💎
-<% } else if (c.rank === 'tester') { %>🧪
-<% } else if (c.rank === 'banned') { %>🔒
-<% } else { %>👤<% } %>
-</span>
+                    <span class="rank-badge">
+                        <% if (c.rank === 'admin') { %>👑
+                        <% } else if (c.rank === 'vip') { %>⭐
+                        <% } else if (c.rank === 'premium') { %>💎
+                        <% } else if (c.rank === 'tester') { %>🧪
+                        <% } else if (c.rank === 'banned') { %>🔒
+                        <% } else { %>👤<% } %>
+                    </span>
+                    <strong class="<% if (c.rank === 'banned') { %>banned-user<% } %>">
+                        <%= c.username %>
+                    </strong>
                     <% if (c.unread > 0) { %><span class="unread"><%= c.unread %></span><% } %>
                     <div style="font-size:0.7rem;"><%= c.last_message ? c.last_message.substring(0,50) : 'Nouvelle conversation' %></div>
                 </div>
@@ -50,20 +56,7 @@
         <button onclick="sendMessage()">📤 Envoyer</button>
     </div>
 </div>
-
 <script>
-    // ========== FONCTION EMOJI (définie AVANT tout) ==========
-    function getRankEmoji(rank) {
-        switch(rank) {
-            case 'admin': return '👑';
-            case 'vip': return '⭐';
-            case 'premium': return '💎';
-            case 'tester': return '🧪';
-            case 'banned': return '🔒';
-            default: return '👤';
-        }
-    }
-
     let currentUserId = null;
     
     async function loadChat(userId) {
