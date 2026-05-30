@@ -244,18 +244,36 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
 });
 
 app.post('/api/admin/users/rank', requireAdmin, async (req, res) => {
-  const { userId, rank } = req.body;
-  const validRanks = ['user', 'vip', 'premium', 'tester', 'banned', 'admin'];
-  if (!validRanks.includes(rank)) return res.status(400).json({ error: 'Rang invalide' });
-  
-  const isAdmin = (rank === 'admin') ? 1 : 0;
-  const { error } = await supabase
-    .from('users')
-    .update({ is_admin: isAdmin, rank })
-    .eq('id', userId);
-  
-  if (error) return res.status(500).json({ error: error.message });
-  res.json({ success: true });
+    const { userId, rank } = req.body;
+    const validRanks = ['user', 'vip', 'premium', 'tester', 'banned', 'admin'];
+    if (!validRanks.includes(rank)) return res.status(400).json({ error: 'Rang invalide' });
+    
+    // ========== SI L'UTILISATEUR DEVIENT BANNI ==========
+    if (rank === 'banned') {
+        // Récupérer le nombre de bannis actuels
+        const { data: bannedUsers } = await supabase
+            .from('users')
+            .select('id')
+            .eq('rank', 'banned');
+        
+        const newBannedNumber = (bannedUsers?.length || 0) + 1;
+        const newUsername = `banned_user-${newBannedNumber}`;
+        
+        await supabase
+            .from('users')
+            .update({ username: newUsername })
+            .eq('id', userId);
+    }
+    // ========== FIN DU CODE POUR BANNIS ==========
+    
+    const isAdmin = (rank === 'admin') ? 1 : 0;
+    const { error } = await supabase
+        .from('users')
+        .update({ is_admin: isAdmin, rank })
+        .eq('id', userId);
+    
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
 });
 
 app.post('/api/admin/users/delete', requireAdmin, async (req, res) => {
