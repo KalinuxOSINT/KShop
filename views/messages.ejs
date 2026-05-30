@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>KaliNet - Messages</title>
+    <style>
+        body{background:#0a0c12;color:#eee;font-family:Arial;padding:2rem;}
+        .container{max-width:1200px;margin:0 auto;display:flex;gap:2rem;}
+        .sidebar{width:300px;background:#1a1f2e;border-radius:1rem;padding:1rem;}
+        .chat{flex:1;background:#1a1f2e;border-radius:1rem;padding:1rem;display:flex;flex-direction:column;height:70vh;}
+        .messages{flex:1;overflow-y:auto;margin-bottom:1rem;}
+        .message{padding:0.5rem;margin:0.5rem 0;border-radius:1rem;}
+        .message.sent{background:#00ffcc22;text-align:right;}
+        .message.received{background:#2a2e3f;}
+        .conversation{padding:0.5rem;cursor:pointer;border-radius:0.5rem;margin-bottom:0.5rem;}
+        .conversation:hover{background:#2a2e3f;}
+        .conversation.active{background:#00ffcc22;border-left:3px solid #00ffcc;}
+        .unread{background:#ff4444;color:white;border-radius:1rem;padding:0.1rem 0.4rem;font-size:0.7rem;margin-left:0.5rem;}
+        textarea{width:100%;padding:0.5rem;background:#1e2332;border:1px solid #00ffcc;color:white;border-radius:0.5rem;}
+        button{background:#00ffcc;color:black;padding:0.5rem 1rem;border:none;border-radius:2rem;cursor:pointer;}
+        .nav a{color:#00ffcc;text-decoration:none;margin-right:1rem;}
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="sidebar">
+        <div class="nav"><a href="/">← Retour</a></div>
+        <h3>💬 Conversations</h3>
+        <div id="conversationsList">
+            <% conversations.forEach(c => { %>
+                <div class="conversation" onclick="loadChat(<%= c.id %>)" data-id="<%= c.id %>">
+                    <strong><%= c.username %></strong> <span class="rank-badge"><%= c.rank %></span>
+                    <% if (c.unread > 0) { %><span class="unread"><%= c.unread %></span><% } %>
+                    <div style="font-size:0.7rem;"><%= c.last_message ? c.last_message.substring(0,50) : 'Nouvelle conversation' %></div>
+                </div>
+            <% }) %>
+        </div>
+    </div>
+    <div class="chat">
+        <div id="chatHeader"><h3>Sélectionne une conversation</h3></div>
+        <div class="messages" id="messagesContainer"></div>
+        <textarea id="messageInput" rows="2" placeholder="Écris ton message..."></textarea>
+        <button onclick="sendMessage()">📤 Envoyer</button>
+    </div>
+</div>
+<script>
+    let currentUserId = null;
+    async function loadChat(userId) {
+        currentUserId = userId;
+        const res = await fetch('/api/messages/' + userId);
+        const messages = await res.json();
+        const container = document.getElementById('messagesContainer');
+        container.innerHTML = messages.map(m => `
+            <div class="message ${m.sender_id == <%= user.id %> ? 'sent' : 'received'}">
+                <strong>${m.sender_id == <%= user.id %> ? 'Moi' : m.username}</strong><br>
+                ${m.content}<br>
+                <small>${new Date(m.created_at).toLocaleString()}</small>
+            </div>
+        `).join('');
+        document.getElementById('chatHeader').innerHTML = `<h3>💬 Conversation</h3>`;
+        container.scrollTop = container.scrollHeight;
+    }
+    async function sendMessage() {
+        if (!currentUserId) return alert('Choisis une conversation');
+        const content = document.getElementById('messageInput').value;
+        if (!content.trim()) return;
+        const res = await fetch('/api/messages/send', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({ receiver_id: currentUserId, content })
+        });
+        if (res.ok) {
+            document.getElementById('messageInput').value = '';
+            loadChat(currentUserId);
+        }
+    }
+    setInterval(() => { if(currentUserId) loadChat(currentUserId); }, 3000);
+</script>
+</body>
+</html>
