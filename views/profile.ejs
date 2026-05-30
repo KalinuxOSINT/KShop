@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>KaliNet - <%= targetUser.username %></title>
+    <style>
+        body{background:#0a0c12;color:#eee;font-family:Arial;padding:2rem;}
+        .container{max-width:800px;margin:0 auto;}
+        .profile-card{background:#1a1f2e;border-radius:1rem;padding:2rem;text-align:center;margin-bottom:2rem;}
+        .post-card{background:#1a1f2e;border-radius:1rem;padding:1rem;margin-bottom:1rem;}
+        .nav a{color:#00ffcc;text-decoration:none;margin-right:1rem;}
+        button{background:#00ffcc;color:black;padding:0.5rem 1rem;border:none;border-radius:2rem;cursor:pointer;}
+        textarea{width:100%;padding:0.5rem;background:#1e2332;border:1px solid #00ffcc;color:white;border-radius:0.5rem;}
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="nav">
+        <a href="/">🏠 Fil</a>
+        <a href="/messages">💬 Messages</a>
+        <a href="/profile/<%= user.id %>">👤 Mon profil</a>
+        <% if (user.is_admin) { %><a href="/admin/users" style="color:#ff4444;">👑 Admin</a><% } %>
+        <a href="/logout">🚪 Déconnexion</a>
+    </div>
+
+    <div class="profile-card">
+        <h1><%= targetUser.username %></h1>
+        <p>🏷️ Rang : <strong><%= targetUser.rank %></strong></p>
+        <p>📅 Membre depuis : <%= new Date(targetUser.created_at).toLocaleDateString() %></p>
+        <p>📝 Bio : <%= targetUser.bio || 'Aucune bio' %></p>
+        <% if (targetUser.id == user.id) { %>
+            <button onclick="editBio()">✏️ Modifier ma bio</button>
+        <% } else { %>
+            <button onclick="startChat()">💬 Envoyer un message</button>
+        <% } %>
+    </div>
+
+    <h2>📰 Posts de <%= targetUser.username %></h2>
+    <% posts.forEach(post => { %>
+        <div class="post-card">
+            <div style="font-size:0.8rem;"><%= new Date(post.created_at).toLocaleString() %></div>
+            <p><%= post.content %></p>
+        </div>
+    <% }) %>
+</div>
+<script>
+    function editBio() {
+        const newBio = prompt('Nouvelle bio (max 300 caractères) :', '<%= targetUser.bio %>');
+        if (newBio !== null) {
+            fetch('/api/profile/bio', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ bio: newBio }) })
+            .then(() => location.reload());
+        }
+    }
+    function startChat() { window.location.href = '/messages'; }
+</script>
+</body>
+</html>
