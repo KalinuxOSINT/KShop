@@ -11,15 +11,22 @@ const PORT = process.env.PORT || 8080;
 // ========== BASE DE DONNÉES ==========
 const db = new sqlite3.Database('./database.sqlite');
 
-// Création des tables et de l'admin en synchrone
 db.serialize(() => {
-  // Table users
+  // Table users avec colonne rank
   db.run(`CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT UNIQUE,
     password TEXT,
-    is_admin INTEGER DEFAULT 0
+    is_admin INTEGER DEFAULT 0,
+    rank TEXT DEFAULT 'user'
   )`);
+
+  // Ajout colonne rank si elle n'existe pas (migration)
+  db.run(`ALTER TABLE users ADD COLUMN rank TEXT DEFAULT 'user'`, (err) => {
+    if (err && !err.message.includes('duplicate')) {
+      // colonne existe déjà ou erreur mineure
+    }
+  });
 
   // Table products
   db.run(`CREATE TABLE IF NOT EXISTS products (
@@ -28,6 +35,16 @@ db.serialize(() => {
     description TEXT,
     price INTEGER,
     category TEXT
+  )`);
+
+  // Table purchases
+  db.run(`CREATE TABLE IF NOT EXISTS purchases (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    product_id INTEGER,
+    stripe_session_id TEXT,
+    status TEXT DEFAULT 'pending',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
   // Ajout des produits par défaut
@@ -41,11 +58,11 @@ db.serialize(() => {
     }
   });
 
-  // Création admin - méthode plus fiable
+  // Création admin - méthode fiable avec rang
   const adminPassword = bcrypt.hashSync('azertydox1234', 10);
-  db.run(`INSERT OR REPLACE INTO users (id, username, password, is_admin) VALUES (1, 'Kalinux', ?, 1)`, [adminPassword], (err) => {
+  db.run(`INSERT OR REPLACE INTO users (id, username, password, is_admin, rank) VALUES (1, 'Kalinux', ?, 1, 'admin')`, [adminPassword], (err) => {
     if (err) console.error("Erreur admin:", err);
-    else console.log("✅ Admin Kalinux prêt");
+    else console.log("✅ Admin Kalinux prêt (rang: admin)");
   });
 });
 
@@ -88,44 +105,20 @@ app.get('/register', (req, res) => { res.render('register'); });
 
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
-  console.log(`Tentative de connexion: ${username}`);
-  
   db.get(`SELECT * FROM users WHERE username = ?`, [username], async (err, user) => {
-    if (err) {
-      console.error("Erreur DB:", err);
-      return res.send('❌ Erreur technique');
-    }
-    
-    if (!user) {
-      console.log(`Utilisateur non trouvé: ${username}`);
+    if (!user || !(await bcrypt.compare(password, user.password))) {
       return res.send('❌ Identifiants invalides. <a href="/login">Réessayer</a>');
     }
-    
-    console.log(`Utilisateur trouvé: ${user.username}, Hash: ${user.password}`);
-    
-    const match = await bcrypt.compare(password, user.password);
-    console.log(`Comparaison mot de passe: ${match ? 'OK' : 'ÉCHEC'}`);
-    
-    if (!match) {
-      return res.send('❌ Mot de passe incorrect. <a href="/login">Réessayer</a>');
-    }
-    
-    // Succès !
     req.session.userId = user.id;
-    req.session.user = { id: user.id, username: user.username, is_admin: user.is_admin };
-    console.log(`Connexion réussie pour ${username}`);
-    
-    if (user.is_admin) {
-      return res.redirect('/admin');
-    }
-    res.redirect('/account');
+    req.session.user = { id: user.id, username: user.username, is_admin: user.is_admin, rank: user.rank || 'user' };
+    res.redirect(user.is_admin ? '/admin' : '/account');
   });
 });
 
 app.post('/register', async (req, res) => {
   const { username, password } = req.body;
   const hashedPassword = await bcrypt.hash(password, 10);
-  db.run(`INSERT INTO users (username, password, is_admin) VALUES (?, ?, 0)`, [username, hashedPassword], (err) => {
+  db.run(`INSERT INTO users (username, password, is_admin, rank) VALUES (?, ?, 0, 'user')`, [username, hashedPassword], (err) => {
     if (err) return res.send('❌ Nom déjà pris. <a href="/register">Réessayer</a>');
     res.redirect('/login');
   });
@@ -140,6 +133,7 @@ app.get('/account', requireAuth, (req, res) => {
   res.render('account', { user: req.session.user });
 });
 
+// ========== ADMIN PANEL ==========
 app.get('/admin', requireAdmin, (req, res) => {
   db.all(`SELECT * FROM products`, (err, products) => {
     res.render('admin', { products: products || [] });
@@ -159,34 +153,64 @@ app.post('/admin/products/delete/:id', requireAdmin, (req, res) => {
     res.redirect('/admin');
   });
 });
-// ROUTE DE SECOURS POUR CRÉER L'ADMIN
-app.get('/create-admin', (req, res) => {
-  const adminHash = bcrypt.hashSync('azertydox1234', 10);
-  db.run(`DELETE FROM users WHERE username = 'Kalinux'`);
-  db.run(`INSERT INTO users (username, password, is_admin) VALUES (?, ?, 1)`, ['Kalinux', adminHash], (err) => {
-    if (err) return res.send('❌ Erreur: ' + err.message);
-    res.send('✅ Admin créé avec succès ! Va te connecter avec <strong>Kalinux</strong> / <strong>azertydox1234</strong>');
-  });
+
+// ========== GESTION DES UTILISATEURS (admin only) ==========
+app.get('/admin/users', requireAdmin, (req, res) => {
+    res.render('admin-users');
 });
-// ROUTE DE TEST POUR VOIR LES UTILISATEURS
-app.get('/debug-users', (req, res) => {
-  db.all(`SELECT id, username, is_admin FROM users`, [], (err, rows) => {
-    if (err) return res.send('Erreur: ' + err.message);
-    if (!rows || rows.length === 0) return res.send('❌ Aucun utilisateur dans la base de données');
-    
-    let html = '<h1>👥 Utilisateurs dans la BDD</h1><ul>';
-    rows.forEach(row => {
-      html += `<li>ID: ${row.id} - Username: ${row.username} - Admin: ${row.is_admin ? 'OUI' : 'NON'}</li>`;
+
+// API : récupérer tous les utilisateurs
+app.get('/api/admin/users', requireAdmin, (req, res) => {
+    db.all(`SELECT id, username, is_admin, COALESCE(rank, 'user') as rank FROM users`, [], (err, rows) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        const users = rows.map(u => ({
+            id: u.id,
+            username: u.username,
+            rank: u.is_admin === 1 ? 'admin' : (u.rank || 'user')
+        }));
+        res.json(users);
     });
-    html += '</ul><a href="/login">Retour au login</a>';
-    res.send(html);
-  });
 });
-// ========== KALI AI (admin only, version gratuite) ==========
-app.get('/kali-ai', requireAdmin, (req, res) => {
-    res.render('kali-ai');
+
+// API : mettre à jour le rang d'un utilisateur
+app.post('/api/admin/users/rank', requireAdmin, (req, res) => {
+    const { userId, rank } = req.body;
+    
+    const validRanks = ['user', 'vip', 'premium', 'tester', 'banned', 'admin'];
+    if (!validRanks.includes(rank)) {
+        return res.status(400).json({ error: 'Rang invalide' });
+    }
+    
+    const isAdmin = (rank === 'admin') ? 1 : 0;
+    
+    db.run(`UPDATE users SET is_admin = ?, rank = ? WHERE id = ?`, [isAdmin, rank, userId], (err) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        res.json({ success: true });
+    });
 });
+
+// API : supprimer un utilisateur
+app.post('/api/admin/users/delete', requireAdmin, (req, res) => {
+    const { userId } = req.body;
+    
+    if (userId === req.session.userId) {
+        return res.status(400).json({ error: "Tu ne peux pas te supprimer toi-même !" });
+    }
+    
+    db.run(`DELETE FROM users WHERE id = ?`, [userId], (err) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        res.json({ success: true });
+    });
+});
+
+// ========== DÉMARRAGE ==========
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🔥 Serveur sur http://0.0.0.0:${PORT}`);
-  console.log(`👑 Admin: Kalinux / azertydox1234`);
+  console.log(`✅ Serveur OK sur http://0.0.0.0:${PORT}`);
+  console.log(`👑 Admin: Kalinux / azertydox1234 (rang: admin)`);
 });
