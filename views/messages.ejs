@@ -28,7 +28,7 @@
         <div id="conversationsList">
             <% conversations.forEach(c => { %>
                 <div class="conversation" onclick="loadChat(<%= c.id %>)" data-id="<%= c.id %>">
-                    <strong><%= c.username %></strong> <span class="rank-badge"><%= c.rank %></span>
+                    <strong><%= c.username %></strong> <span class="rank-badge"><%= getRankEmoji(c.rank) %></span>
                     <% if (c.unread > 0) { %><span class="unread"><%= c.unread %></span><% } %>
                     <div style="font-size:0.7rem;"><%= c.last_message ? c.last_message.substring(0,50) : 'Nouvelle conversation' %></div>
                 </div>
