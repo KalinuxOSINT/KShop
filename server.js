@@ -332,3 +332,44 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ KaliNet sur http://0.0.0.0:${PORT}`);
   console.log(`👑 Admin: Kalinux / azertydox1234`);
 });
+// Page de contact
+app.get('/contact', requireAuth, (req, res) => {
+    res.render('contact', { user: req.session.user });
+});
+
+// Envoyer un message de contact
+app.post('/api/contact', requireAuth, async (req, res) => {
+    const { subject, message } = req.body;
+    if (!subject || !message) return res.status(400).json({ error: 'Sujet et message requis' });
+    
+    const { error } = await supabase
+        .from('contact_messages')
+        .insert({ user_id: req.session.userId, subject, message });
+    
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+});
+
+// Admin : voir tous les messages
+app.get('/admin/messages', requireAdmin, async (req, res) => {
+    const { data: messages, error } = await supabase
+        .from('contact_messages')
+        .select(`*, users(username)`)
+        .order('created_at', { ascending: false });
+    
+    res.render('admin-messages', { user: req.session.user, messages: messages || [] });
+});
+
+// Admin : répondre à un message
+app.post('/api/admin/messages/reply', requireAdmin, async (req, res) => {
+    const { messageId, reply } = req.body;
+    if (!reply) return res.status(400).json({ error: 'Réponse requise' });
+    
+    const { error } = await supabase
+        .from('contact_messages')
+        .update({ admin_reply: reply, status: 'replied', replied_at: new Date() })
+        .eq('id', messageId);
+    
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+});
