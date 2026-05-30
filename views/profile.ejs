@@ -10,6 +10,9 @@
         .nav a{color:#00ffcc;text-decoration:none;margin-right:1rem;}
         button{background:#00ffcc;color:black;padding:0.5rem 1rem;border:none;border-radius:2rem;cursor:pointer;}
         textarea{width:100%;padding:0.5rem;background:#1e2332;border:1px solid #00ffcc;color:white;border-radius:0.5rem;}
+        .rank-badge{font-size:0.8rem;padding:0.2rem 0.5rem;border-radius:1rem;background:#2a2e3f;}
+        .banned-user{text-decoration:line-through;color:#ff4444;}
+        #unreadBadge{background:#ff4444;color:white;border-radius:50%;padding:0.1rem 0.4rem;font-size:0.7rem;margin-left:0.3rem;}
     </style>
 </head>
 <body>
@@ -18,13 +21,29 @@
         <a href="/">🏠 Fil</a>
         <a href="/messages">💬 Messages</a>
         <a href="/profile/<%= user.id %>">👤 Mon profil</a>
-        <% if (user.is_admin) { %><a href="/admin/users" style="color:#ff4444;">👑 Admin</a><% } %>
+        <a href="/contact">📨 Contact</a>
+        <a href="/my-tickets">📋 Mes tickets</a>
+        <% if (user.is_admin) { %>
+            <a href="/admin/users" style="color:#ff4444;">👑 Admin</a>
+            <a href="/admin/messages" id="adminMessagesLink" style="position:relative;">
+                📩 Messages <span id="unreadBadge">0</span>
+            </a>
+        <% } %>
         <a href="/logout">🚪 Déconnexion</a>
     </div>
 
     <div class="profile-card">
         <h1><%= targetUser.username %></h1>
-        <p>🏷️ Rang : <strong><%= targetUser.rank %></strong></p>
+        <p>🏷️ Rang : 
+            <span class="rank-badge">
+                <% if (targetUser.rank === 'admin') { %>👑 Admin
+                <% } else if (targetUser.rank === 'vip') { %>⭐ VIP
+                <% } else if (targetUser.rank === 'premium') { %>💎 Premium
+                <% } else if (targetUser.rank === 'tester') { %>🧪 Testeur
+                <% } else if (targetUser.rank === 'banned') { %>🔒 Banni
+                <% } else { %>👤 Utilisateur<% } %>
+            </span>
+        </p>
         <p>📅 Membre depuis : <%= new Date(targetUser.created_at).toLocaleDateString() %></p>
         <p>📝 Bio : <%= targetUser.bio || 'Aucune bio' %></p>
         <% if (targetUser.id == user.id) { %>
@@ -51,6 +70,21 @@
         }
     }
     function startChat() { window.location.href = '/messages'; }
+    
+    async function checkUnreadMessages() {
+        <% if (user.is_admin) { %>
+            const res = await fetch('/api/admin/messages/unread-count');
+            const data = await res.json();
+            const badge = document.getElementById('unreadBadge');
+            if (badge) {
+                const count = data.count || 0;
+                badge.innerText = count;
+                badge.style.display = count > 0 ? 'inline' : 'none';
+            }
+        <% } %>
+    }
+    setInterval(checkUnreadMessages, 30000);
+    checkUnreadMessages();
 </script>
 </body>
 </html>
