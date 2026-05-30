@@ -31,3 +31,12 @@ a, button {
   border: none;
   cursor: pointer;
 }
+a.profile-link {
+    text-decoration: none;
+    color: inherit;
+}
+
+a.profile-link:hover {
+    text-decoration: underline;
+    color: #00ffcc;
+}
