@@ -32,7 +32,12 @@
     <div id="postsContainer">
         <% posts.forEach(post => { %>
             <div class="post-card">
-                <div><strong><%= post.username %></strong> <span class="rank-badge"><%= post.rank %></span></div>
+                <div>
+    <a href="/profile/<%= post.user_id %>" style="text-decoration: none; color: #00ffcc;">
+        <strong><%= post.username %></strong>
+    </a>
+    <span class="rank-badge"><%= post.rank %></span>
+</div>
                 <div style="font-size:0.8rem;"><%= new Date(post.created_at).toLocaleString() %></div>
                 <p><%= post.content %></p>
             </div>
