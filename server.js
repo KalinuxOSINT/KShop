@@ -373,3 +373,69 @@ app.post('/api/admin/messages/reply', requireAdmin, async (req, res) => {
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true });
 });
+// ========== SYSTÈME DE MESSAGES / TICKETS ==========
+
+// Page de contact (pour les utilisateurs)
+app.get('/contact', requireAuth, (req, res) => {
+    res.render('contact', { user: req.session.user });
+});
+
+// Envoyer un message
+app.post('/api/contact', requireAuth, async (req, res) => {
+    const { subject, message } = req.body;
+    if (!subject || !message) return res.status(400).json({ error: 'Sujet et message requis' });
+    
+    const { error } = await supabase
+        .from('contact_messages')
+        .insert({ user_id: req.session.userId, subject, message });
+    
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+});
+
+// Mes tickets (pour l'utilisateur connecté)
+app.get('/my-tickets', requireAuth, async (req, res) => {
+    const { data: tickets, error } = await supabase
+        .from('contact_messages')
+        .select('*')
+        .eq('user_id', req.session.userId)
+        .order('created_at', { ascending: false });
+    
+    res.render('my-tickets', { user: req.session.user, tickets: tickets || [] });
+});
+
+// Admin : voir tous les messages
+app.get('/admin/messages', requireAdmin, async (req, res) => {
+    const { data: messages, error } = await supabase
+        .from('contact_messages')
+        .select(`*, users(id, username)`)
+        .order('created_at', { ascending: false });
+    
+    res.render('admin-messages', { user: req.session.user, messages: messages || [] });
+});
+
+// Admin : répondre à un message
+app.post('/api/admin/messages/reply', requireAdmin, async (req, res) => {
+    const { messageId, reply } = req.body;
+    if (!reply) return res.status(400).json({ error: 'Réponse requise' });
+    
+    const { error } = await supabase
+        .from('contact_messages')
+        .update({ admin_reply: reply, status: 'replied', replied_at: new Date() })
+        .eq('id', messageId);
+    
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+});
+
+// Admin : marquer comme résolu
+app.post('/api/admin/messages/resolve', requireAdmin, async (req, res) => {
+    const { messageId } = req.body;
+    const { error } = await supabase
+        .from('contact_messages')
+        .update({ status: 'resolved' })
+        .eq('id', messageId);
+    
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+});
