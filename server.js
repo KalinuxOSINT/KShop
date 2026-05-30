@@ -354,7 +354,16 @@ app.post('/api/admin/messages/resolve', requireAdmin, async (req, res) => {
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true });
 });
-
+// API : compter les messages sans réponse (pour notification admin)
+app.get('/api/admin/messages/unread-count', requireAdmin, async (req, res) => {
+    const { count, error } = await supabase
+        .from('contact_messages')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending');
+    
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ count: count || 0 });
+});
 // ========== DÉMARRAGE ==========
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ KaliNet sur http://0.0.0.0:${PORT}`);
