@@ -40,9 +40,11 @@
                         <% } else if (c.rank === 'banned') { %>🔒
                         <% } else { %>👤<% } %>
                     </span>
-                    <strong class="<% if (c.rank === 'banned') { %>banned-user<% } %>">
-                        <%= c.username %>
-                    </strong>
+                    <a href="/profile/<%= c.id %>" style="text-decoration: none; color: inherit;">
+    <strong class="<% if (c.rank === 'banned') { %>banned-user<% } %>">
+        <%= c.username %>
+    </strong>
+</a>
                     <% if (c.unread > 0) { %><span class="unread"><%= c.unread %></span><% } %>
                     <div style="font-size:0.7rem;"><%= c.last_message ? c.last_message.substring(0,50) : 'Nouvelle conversation' %></div>
                 </div>
