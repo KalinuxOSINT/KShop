@@ -6,24 +6,21 @@
         body{background:#0a0c12;color:#eee;font-family:Arial;padding:2rem;}
         .container{max-width:800px;margin:0 auto;}
         .post-card{background:#1a1f2e;border-radius:1rem;padding:1rem;margin-bottom:1rem;}
-        .post-header{display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;}
-        .avatar{width:40px;height:40px;border-radius:50%;background:#00ffcc22;display:flex;align-items:center;justify-content:center;}
-        .username{font-weight:bold;color:#00ffcc;}
-        .rank-badge{font-size:0.7rem;padding:0.1rem 0.4rem;border-radius:1rem;background:#2a2e3f;}
-        textarea{width:100%;padding:0.5rem;background:#1e2332;border:1px solid #00ffcc;color:white;border-radius:0.5rem;}
-        button{background:#00ffcc;color:black;padding:0.5rem 1rem;border:none;border-radius:2rem;cursor:pointer;}
         .nav{display:flex;gap:1rem;margin-bottom:2rem;flex-wrap:wrap;}
         .nav a{color:#00ffcc;text-decoration:none;}
+        textarea{width:100%;padding:0.5rem;background:#1e2332;border:1px solid #00ffcc;color:white;border-radius:0.5rem;}
+        button{background:#00ffcc;color:black;padding:0.5rem 1rem;border:none;border-radius:2rem;cursor:pointer;}
+        .rank-badge{font-size:0.7rem;padding:0.1rem 0.4rem;border-radius:1rem;background:#2a2e3f;}
     </style>
 </head>
 <body>
 <div class="container">
     <div class="nav">
-        <span>👋 <?= user.username ?> (<?= user.rank ?>)</span>
+        <span>👋 <%= user.username %> (<%= user.rank %>)</span>
         <a href="/">🏠 Fil</a>
         <a href="/messages">💬 Messages</a>
-        <a href="/profile/<?= user.id ?>">👤 Mon profil</a>
-        <a href="/admin/users" style="color:#ff4444;" id="adminLink" style="display:none;">👑 Admin</a>
+        <a href="/profile/<%= user.id %>">👤 Mon profil</a>
+        <% if (user.is_admin) { %><a href="/admin/users" style="color:#ff4444;">👑 Admin</a><% } %>
         <a href="/logout">🚪 Déconnexion</a>
     </div>
 
@@ -33,27 +30,23 @@
 
     <h2>📰 Fil d'actualité</h2>
     <div id="postsContainer">
-        <? posts.forEach(post => { ?>
+        <% posts.forEach(post => { %>
             <div class="post-card">
-                <div class="post-header">
-                    <div class="avatar">👤</div>
-                    <div><span class="username"><?= post.username ?></span> <span class="rank-badge"><?= post.rank || 'user' ?></span></div>
-                    <div style="font-size:0.7rem;"><?= new Date(post.created_at).toLocaleString() ?></div>
-                </div>
-                <div><?= post.content ?></div>
+                <div><strong><%= post.username %></strong> <span class="rank-badge"><%= post.rank %></span></div>
+                <div style="font-size:0.8rem;"><%= new Date(post.created_at).toLocaleString() %></div>
+                <p><%= post.content %></p>
             </div>
-        <? }) ?>
+        <% }) %>
     </div>
 </div>
 <script>
     async function sendPost() {
         const content = document.getElementById('postContent').value;
         if (!content.trim()) return alert('Message vide');
-        const res = await fetch('/api/post', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({content}) });
+        const res = await fetch('/api/post', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({content}) });
         if (res.ok) location.reload();
         else alert('Erreur');
     }
-    <? if (user.is_admin) { %>document.getElementById('adminLink').style.display='inline';<? } %>
 </script>
 </body>
 </html>
