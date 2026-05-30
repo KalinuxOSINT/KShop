@@ -11,6 +11,17 @@
         textarea{width:100%;padding:0.5rem;background:#1e2332;border:1px solid #00ffcc;color:white;border-radius:0.5rem;}
         button{background:#00ffcc;color:black;padding:0.5rem 1rem;border:none;border-radius:2rem;cursor:pointer;}
         .rank-badge{font-size:0.7rem;padding:0.1rem 0.4rem;border-radius:1rem;background:#2a2e3f;}
+        .banned-user {
+            text-decoration: line-through;
+            color: #ff4444;
+        }
+        a.profile-link {
+            text-decoration: none;
+            color: #00ffcc;
+        }
+        a.profile-link:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
@@ -20,6 +31,8 @@
         <a href="/">🏠 Fil</a>
         <a href="/messages">💬 Messages</a>
         <a href="/profile/<%= user.id %>">👤 Mon profil</a>
+        <a href="/contact">📨 Contact</a>
+        <a href="/my-tickets">📋 Mes tickets</a>
         <% if (user.is_admin) { %><a href="/admin/users" style="color:#ff4444;">👑 Admin</a><% } %>
         <a href="/logout">🚪 Déconnexion</a>
     </div>
@@ -33,11 +46,18 @@
         <% posts.forEach(post => { %>
             <div class="post-card">
                 <div>
-    <a href="/profile/<%= post.user_id %>" style="text-decoration: none; color: #00ffcc;">
-        <strong><%= post.username %></strong>
-    </a>
-    <span class="rank-badge"><%= post.rank %></span>
-</div>
+                    <a href="/profile/<%= post.user_id %>" class="profile-link">
+                        <strong><%= post.users.username %></strong>
+                    </a>
+                    <span class="rank-badge">
+                        <% if (post.users.rank === 'admin') { %>👑
+                        <% } else if (post.users.rank === 'vip') { %>⭐
+                        <% } else if (post.users.rank === 'premium') { %>💎
+                        <% } else if (post.users.rank === 'tester') { %>🧪
+                        <% } else if (post.users.rank === 'banned') { %>🔒
+                        <% } else { %>👤<% } %>
+                    </span>
+                </div>
                 <div style="font-size:0.8rem;"><%= new Date(post.created_at).toLocaleString() %></div>
                 <p><%= post.content %></p>
             </div>
@@ -52,8 +72,6 @@
         if (res.ok) location.reload();
         else alert('Erreur');
     }
-<a href="/contact">📨 Contact</a>
-<a href="/my-tickets">📋 Mes tickets</a>
 </script>
 </body>
 </html>
