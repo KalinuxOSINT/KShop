@@ -232,7 +232,8 @@ app.get('/admin/users', requireAdmin, async (req, res) => {
 app.get('/api/admin/users', requireAdmin, async (req, res) => {
   const { data: users, error } = await supabase
     .from('users')
-    .select('id, username, is_admin, rank, bio, created_at');
+    .select('id, username, is_admin, rank, bio, created_at')
+    .order('id', { ascending: true });  // ← AJOUTE CETTE LIGNE
   
   if (error) return res.status(500).json({ error: error.message });
   
