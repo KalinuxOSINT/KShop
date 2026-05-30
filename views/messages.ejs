@@ -66,13 +66,15 @@
         const res = await fetch('/api/messages/' + userId);
         const messages = await res.json();
         const container = document.getElementById('messagesContainer');
-        container.innerHTML = messages.map(m => `
-            <div class="message ${m.sender_id == <%= user.id %> ? 'sent' : 'received'}">
-                <strong>${m.sender_id == <%= user.id %> ? 'Moi' : m.username}</strong><br>
-                ${escapeHtml(m.content)}<br>
-                <small>${new Date(m.created_at).toLocaleString()}</small>
-            </div>
-        `).join('');
+container.innerHTML = messages.map(m => `
+    <div class="message ${m.sender_id == <%= user.id %> ? 'sent' : 'received'}">
+        <a href="/profile/${m.sender_id}" style="text-decoration: none; color: #00ffcc;">
+            <strong>${m.sender_id == <%= user.id %> ? 'Moi' : m.username}</strong>
+        </a><br>
+        ${escapeHtml(m.content)}<br>
+        <small>${new Date(m.created_at).toLocaleString()}</small>
+    </div>
+`).join('');
         document.getElementById('chatHeader').innerHTML = `<h3>💬 Conversation</h3>`;
         container.scrollTop = container.scrollHeight;
     }
