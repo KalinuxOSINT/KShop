@@ -102,6 +102,34 @@ app.post('/api/post', requireAuth, async (req, res) => {
     res.json({ success: true });
 });
 
+// Supprimer un post (admin ou auteur)
+app.post('/api/post/delete', requireAuth, async (req, res) => {
+    const { postId } = req.body;
+    
+    const { data: post, error } = await supabase
+        .from('posts')
+        .select('user_id')
+        .eq('id', postId)
+        .single();
+    
+    if (error || !post) return res.status(404).json({ error: 'Post non trouvé' });
+    
+    const isAuthor = (post.user_id === req.session.userId);
+    const isAdmin = req.session.user?.is_admin === 1;
+    
+    if (!isAuthor && !isAdmin) {
+        return res.status(403).json({ error: 'Non autorisé' });
+    }
+    
+    const { error: deleteError } = await supabase
+        .from('posts')
+        .delete()
+        .eq('id', postId);
+    
+    if (deleteError) return res.status(500).json({ error: deleteError.message });
+    res.json({ success: true });
+});
+
 // ========== MESSAGERIE ==========
 app.get('/messages', requireAuth, async (req, res) => {
     const { data: users, error } = await supabase
@@ -244,7 +272,6 @@ app.post('/api/admin/users/rank', requireAdmin, async (req, res) => {
     const validRanks = ['user', 'vip', 'premium', 'tester', 'banned', 'admin'];
     if (!validRanks.includes(rank)) return res.status(400).json({ error: 'Rang invalide' });
     
-    // Si l'utilisateur devient banni
     if (rank === 'banned') {
         const { data: bannedUsers } = await supabase
             .from('users')
@@ -290,12 +317,10 @@ app.get('/admin', requireAdmin, (req, res) => {
 
 // ========== SYSTÈME DE MESSAGES / TICKETS ==========
 
-// Page de contact (pour les utilisateurs)
 app.get('/contact', requireAuth, (req, res) => {
     res.render('contact', { user: req.session.user });
 });
 
-// Envoyer un message
 app.post('/api/contact', requireAuth, async (req, res) => {
     const { subject, message } = req.body;
     if (!subject || !message) return res.status(400).json({ error: 'Sujet et message requis' });
@@ -308,7 +333,6 @@ app.post('/api/contact', requireAuth, async (req, res) => {
     res.json({ success: true });
 });
 
-// Mes tickets (pour l'utilisateur connecté)
 app.get('/my-tickets', requireAuth, async (req, res) => {
     const { data: tickets, error } = await supabase
         .from('contact_messages')
@@ -319,7 +343,6 @@ app.get('/my-tickets', requireAuth, async (req, res) => {
     res.render('my-tickets', { user: req.session.user, tickets: tickets || [] });
 });
 
-// Admin : voir tous les messages
 app.get('/admin/messages', requireAdmin, async (req, res) => {
     const { data: messages, error } = await supabase
         .from('contact_messages')
@@ -329,7 +352,6 @@ app.get('/admin/messages', requireAdmin, async (req, res) => {
     res.render('admin-messages', { user: req.session.user, messages: messages || [] });
 });
 
-// Admin : répondre à un message
 app.post('/api/admin/messages/reply', requireAdmin, async (req, res) => {
     const { messageId, reply } = req.body;
     if (!reply) return res.status(400).json({ error: 'Réponse requise' });
@@ -343,7 +365,6 @@ app.post('/api/admin/messages/reply', requireAdmin, async (req, res) => {
     res.json({ success: true });
 });
 
-// Admin : marquer comme résolu
 app.post('/api/admin/messages/resolve', requireAdmin, async (req, res) => {
     const { messageId } = req.body;
     const { error } = await supabase
@@ -354,6 +375,7 @@ app.post('/api/admin/messages/resolve', requireAdmin, async (req, res) => {
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true });
 });
+
 // API : compter les messages sans réponse (pour notification admin)
 app.get('/api/admin/messages/unread-count', requireAdmin, async (req, res) => {
     const { count, error } = await supabase
@@ -364,6 +386,7 @@ app.get('/api/admin/messages/unread-count', requireAdmin, async (req, res) => {
     if (error) return res.status(500).json({ error: error.message });
     res.json({ count: count || 0 });
 });
+
 // ========== DÉMARRAGE ==========
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ KaliNet sur http://0.0.0.0:${PORT}`);
