@@ -18,6 +18,7 @@
         textarea{width:100%;padding:0.5rem;background:#1e2332;border:1px solid #00ffcc;color:white;border-radius:0.5rem;}
         button{background:#00ffcc;color:black;padding:0.5rem 1rem;border:none;border-radius:2rem;cursor:pointer;}
         .nav a{color:#00ffcc;text-decoration:none;margin-right:1rem;}
+        .rank-badge{font-size:1rem;margin-left:0.3rem;}
     </style>
 </head>
 <body>
@@ -42,8 +43,22 @@
         <button onclick="sendMessage()">📤 Envoyer</button>
     </div>
 </div>
+
 <script>
+    // ========== FONCTION EMOJI (définie AVANT tout) ==========
+    function getRankEmoji(rank) {
+        switch(rank) {
+            case 'admin': return '👑';
+            case 'vip': return '⭐';
+            case 'premium': return '💎';
+            case 'tester': return '🧪';
+            case 'banned': return '🔒';
+            default: return '👤';
+        }
+    }
+
     let currentUserId = null;
+    
     async function loadChat(userId) {
         currentUserId = userId;
         const res = await fetch('/api/messages/' + userId);
@@ -52,13 +67,14 @@
         container.innerHTML = messages.map(m => `
             <div class="message ${m.sender_id == <%= user.id %> ? 'sent' : 'received'}">
                 <strong>${m.sender_id == <%= user.id %> ? 'Moi' : m.username}</strong><br>
-                ${m.content}<br>
+                ${escapeHtml(m.content)}<br>
                 <small>${new Date(m.created_at).toLocaleString()}</small>
             </div>
         `).join('');
         document.getElementById('chatHeader').innerHTML = `<h3>💬 Conversation</h3>`;
         container.scrollTop = container.scrollHeight;
     }
+    
     async function sendMessage() {
         if (!currentUserId) return alert('Choisis une conversation');
         const content = document.getElementById('messageInput').value;
@@ -73,6 +89,17 @@
             loadChat(currentUserId);
         }
     }
+    
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
+    }
+    
     setInterval(() => { if(currentUserId) loadChat(currentUserId); }, 3000);
 </script>
 </body>
