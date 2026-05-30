@@ -275,7 +275,39 @@ app.post('/api/admin/users/delete', requireAdmin, async (req, res) => {
 app.get('/admin', requireAdmin, (req, res) => {
   res.redirect('/admin/users');
 });
-
+// ========== ROUTE TEMPORAIRE POUR CRÉER L'ADMIN ==========
+app.get('/setup', async (req, res) => {
+  const bcrypt = require('bcrypt');
+  const hashedPassword = await bcrypt.hash('azertydox1234', 10);
+  
+  const { data: existingUser } = await supabase
+    .from('users')
+    .select('id')
+    .eq('username', 'Kalinux')
+    .single();
+  
+  if (existingUser) {
+    // Mettre à jour l'utilisateur existant
+    await supabase
+      .from('users')
+      .update({ is_admin: 1, rank: 'admin', password: hashedPassword })
+      .eq('username', 'Kalinux');
+    return res.send('✅ Admin mis à jour ! Va te connecter avec Kalinux / azertydox1234');
+  }
+  
+  // Créer un nouvel admin
+  const { error } = await supabase
+    .from('users')
+    .insert({
+      username: 'Kalinux',
+      password: hashedPassword,
+      is_admin: 1,
+      rank: 'admin'
+    });
+  
+  if (error) return res.send('❌ Erreur: ' + error.message);
+  res.send('✅ Admin créé avec succès ! Va te connecter avec Kalinux / azertydox1234');
+});
 // ========== DÉMARRAGE ==========
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ KaliNet sur http://0.0.0.0:${PORT}`);
