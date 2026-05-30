@@ -147,19 +147,36 @@ app.get('/messages', requireAuth, (req, res) => {
 
 app.get('/api/messages/:userId', requireAuth, (req, res) => {
   const otherId = parseInt(req.params.userId);
-  db.all(`SELECT * FROM messages WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?) ORDER BY created_at ASC`, 
-    [req.session.userId, otherId, otherId, req.session.userId], (err, messages) => {
+  db.all(`
+    SELECT messages.*, 
+           sender.username as sender_name,
+           receiver.username as receiver_name
+    FROM messages 
+    JOIN users as sender ON messages.sender_id = sender.id
+    JOIN users as receiver ON messages.receiver_id = receiver.id
+    WHERE (sender_id = ? AND receiver_id = ?) 
+       OR (sender_id = ? AND receiver_id = ?)
+    ORDER BY messages.created_at ASC
+  `, [req.session.userId, otherId, otherId, req.session.userId], (err, messages) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: err.message });
+    }
+    // Marquer comme lus
     db.run(`UPDATE messages SET is_read = 1 WHERE sender_id = ? AND receiver_id = ?`, [otherId, req.session.userId]);
-    res.json(messages || []);
-  });
-});
-
-app.post('/api/messages/send', requireAuth, (req, res) => {
-  const { receiver_id, content } = req.body;
-  if (!content || content.length > 1000) return res.status(400).json({ error: 'Message trop long' });
-  db.run(`INSERT INTO messages (sender_id, receiver_id, content) VALUES (?, ?, ?)`, [req.session.userId, receiver_id, content], (err) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ success: true });
+    
+    // Transformer les messages pour avoir le champ 'username'
+    const formattedMessages = messages.map(m => ({
+      id: m.id,
+      sender_id: m.sender_id,
+      receiver_id: m.receiver_id,
+      content: m.content,
+      created_at: m.created_at,
+      is_read: m.is_read,
+      username: m.sender_name  // Le nom de l'expéditeur
+    }));
+    
+    res.json(formattedMessages);
   });
 });
 
