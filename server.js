@@ -206,7 +206,17 @@ app.post('/api/admin/users/delete', requireAdmin, (req, res) => {
   if (userId == req.session.userId) return res.status(400).json({ error: "Impossible de se supprimer" });
   db.run(`DELETE FROM users WHERE id = ?`, [userId], () => res.json({ success: true }));
 });
-
+app.get('/fix-admin', (req, res) => {
+  const bcrypt = require('bcrypt');
+  const adminPassword = bcrypt.hashSync('azertydox1234', 10);
+  db.run(`UPDATE users SET is_admin = 1, rank = 'admin' WHERE username = 'Kalinux'`, (err) => {
+    if (err) return res.send('❌ Erreur: ' + err.message);
+    db.run(`INSERT OR REPLACE INTO users (id, username, password, is_admin, rank) VALUES (1, 'Kalinux', ?, 1, 'admin')`, [adminPassword], (err2) => {
+      if (err2) return res.send('❌ Erreur insertion: ' + err2.message);
+      res.send('✅ Admin Kalinux restauré ! Va te déconnecter et reconnecter.');
+    });
+  });
+});
 // ========== DÉMARRAGE ==========
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ KaliNet sur http://0.0.0.0:${PORT}`);
