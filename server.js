@@ -386,7 +386,38 @@ app.get('/api/admin/messages/unread-count', requireAdmin, async (req, res) => {
     if (error) return res.status(500).json({ error: error.message });
     res.json({ count: count || 0 });
 });
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });
 
+app.post('/api/messages/upload', requireAuth, upload.single('file'), async (req, res) => {
+    const { receiver_id } = req.body;
+    const file = req.file;
+    
+    if (!file) return res.status(400).json({ error: 'Aucun fichier' });
+    if (file.size > 10 * 1024 * 1024) return res.status(400).json({ error: 'Fichier trop gros (max 10MB)' });
+    
+    const fileExt = file.originalname.split('.').pop();
+    const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+    
+    const { data, error } = await supabase.storage
+        .from('kalinet-files')
+        .upload(fileName, file.buffer, { contentType: file.mimetype });
+    
+    if (error) return res.status(500).json({ error: error.message });
+    
+    const fileUrl = `${process.env.SUPABASE_URL}/storage/v1/object/public/kalinet-files/${fileName}`;
+    
+    const { error: msgError } = await supabase
+        .from('messages')
+        .insert({
+            sender_id: req.session.userId,
+            receiver_id: parseInt(receiver_id),
+            content: `📎 ${file.originalname} : ${fileUrl}`
+        });
+    
+    if (msgError) return res.status(500).json({ error: msgError.message });
+    res.json({ success: true, fileUrl });
+});
 // ========== DÉMARRAGE ==========
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ KaliNet sur http://0.0.0.0:${PORT}`);
