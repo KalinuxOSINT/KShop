@@ -14,10 +14,13 @@
         .conversation{padding:0.5rem;cursor:pointer;border-radius:0.5rem;margin-bottom:0.5rem;}
         .conversation:hover{background:#2a2e3f;}
         .unread{background:#ff4444;color:white;border-radius:1rem;padding:0.1rem 0.4rem;font-size:0.7rem;margin-left:0.5rem;}
-        textarea{width:100%;padding:0.5rem;background:#1e2332;border:1px solid #00ffcc;color:white;border-radius:0.5rem;}
+        .input-area{display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;}
+        textarea{flex:1;padding:0.5rem;background:#1e2332;border:1px solid #00ffcc;color:white;border-radius:0.5rem;resize:none;}
         button{background:#00ffcc;color:black;padding:0.5rem 1rem;border:none;border-radius:2rem;cursor:pointer;}
         .nav a{color:#00ffcc;text-decoration:none;margin-right:1rem;}
         .rank-badge{font-size:1rem;margin-right:0.3rem;}
+        .file-btn{background:#00aaff;margin-left:0.5rem;}
+        .file-link{color:#00ffcc;text-decoration:underline;}
         .banned-user{text-decoration:line-through;color:#ff4444;}
         #unreadBadge{background:#ff4444;color:white;border-radius:50%;padding:0.1rem 0.4rem;font-size:0.7rem;margin-left:0.3rem;}
     </style>
@@ -28,7 +31,7 @@
         <div class="nav">
             <a href="/">← Retour</a>
             <% if (user.is_admin) { %>
-                <a href="/admin/messages" id="adminMessagesLink" style="position:relative;">
+                <a href="/admin/messages" id="adminMessagesLink">
                     📩 Messages <span id="unreadBadge">0</span>
                 </a>
             <% } %>
@@ -57,8 +60,12 @@
     <div class="chat">
         <div id="chatHeader"><h3>Sélectionne une conversation</h3></div>
         <div class="messages" id="messagesContainer"></div>
-        <textarea id="messageInput" rows="2" placeholder="Écris ton message..."></textarea>
-        <button onclick="sendMessage()">📤 Envoyer</button>
+        <div class="input-area">
+            <textarea id="messageInput" rows="2" placeholder="Écris ton message..."></textarea>
+            <input type="file" id="fileInput" style="display:none;">
+            <button class="file-btn" onclick="document.getElementById('fileInput').click()">📎 Joindre</button>
+            <button onclick="sendMessage()">📤 Envoyer</button>
+        </div>
     </div>
 </div>
 <script>
@@ -69,16 +76,26 @@
         const res = await fetch('/api/messages/' + userId);
         const messages = await res.json();
         const container = document.getElementById('messagesContainer');
-        container.innerHTML = messages.map(m => `
-            <div class="message ${m.sender_id == <%= user.id %> ? 'sent' : 'received'}">
-                <a href="/profile/${m.sender_id}" style="text-decoration:none;color:#00ffcc;">
-                    <strong>${m.sender_id == <%= user.id %> ? 'Moi' : escapeHtml(m.username)}</strong>
-                </a><br>
-                ${escapeHtml(m.content)}<br>
-                <small>${new Date(m.created_at).toLocaleString()}</small>
-            </div>
-        `).join('');
-        document.getElementById('chatHeader').innerHTML = `<h3>💬 Conversation</h3>`;
+        container.innerHTML = messages.map(m => {
+            let content = escapeHtml(m.content);
+            // Détecter les liens de fichiers
+            if (content.includes('/storage/v1/object/public/')) {
+                const fileMatch = content.match(/(https?:\/\/[^\s]+)/);
+                if (fileMatch) {
+                    content = `📎 <a href="${fileMatch[0]}" target="_blank" class="file-link">Voir le fichier</a>`;
+                }
+            }
+            return `
+                <div class="message ${m.sender_id == <%= user.id %> ? 'sent' : 'received'}">
+                    <a href="/profile/${m.sender_id}" style="text-decoration:none;color:#00ffcc;">
+                        <strong>${m.sender_id == <%= user.id %> ? 'Moi' : escapeHtml(m.username)}</strong>
+                    </a><br>
+                    ${content}<br>
+                    <small>${new Date(m.created_at).toLocaleString()}</small>
+                </div>
+            `;
+        }).join('');
+        document.getElementById('chatHeader').innerHTML = `<h3>💬 Conversation avec ${escapeHtml(messages[0]?.username || '...')}</h3>`;
         container.scrollTop = container.scrollHeight;
     }
     
@@ -96,6 +113,31 @@
             loadChat(currentUserId);
         }
     }
+    
+    // Upload de fichier
+    document.getElementById('fileInput').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        if (!currentUserId) return alert('Choisis une conversation d\'abord');
+        if (file.size > 10 * 1024 * 1024) return alert('Fichier trop gros (max 10MB)');
+        
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('receiver_id', currentUserId);
+        
+        const res = await fetch('/api/messages/upload', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (res.ok) {
+            loadChat(currentUserId);
+        } else {
+            const error = await res.json();
+            alert('Erreur: ' + (error.error || 'Upload échoué'));
+        }
+        document.getElementById('fileInput').value = '';
+    });
     
     function escapeHtml(str) {
         if (!str) return '';
