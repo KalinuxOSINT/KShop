@@ -79,9 +79,12 @@ app.get('/logout', (req, res) => {
     res.redirect('/');
 });
 
-// ========== FIL D'ACTUALITÉ (VERSION FIABLE) ==========
+// ========== FIL D'ACTUALITÉ (VERSION DEBUG COMPLÈTE) ==========
 app.get('/', requireAuth, async (req, res) => {
-    // 1. Récupérer tous les posts
+    console.log("=== DÉBOGAGE POSTS ===");
+    console.log("Utilisateur connecté:", req.session.userId);
+    
+    // Récupérer tous les posts
     const { data: posts, error: postsError } = await supabase
         .from('posts')
         .select('*')
@@ -92,7 +95,9 @@ app.get('/', requireAuth, async (req, res) => {
         return res.render('index', { user: req.session.user, posts: [] });
     }
     
-    // 2. Pour chaque post, récupérer l'utilisateur
+    console.log("Nombre de posts trouvés:", posts.length);
+    
+    // Pour chaque post, récupérer l'utilisateur
     const postsWithUsers = [];
     for (const post of posts) {
         const { data: user, error: userError } = await supabase
@@ -101,19 +106,25 @@ app.get('/', requireAuth, async (req, res) => {
             .eq('id', post.user_id)
             .single();
         
+        if (userError) {
+            console.error("Erreur utilisateur pour post", post.id, "user_id:", post.user_id, "-", userError.message);
+        }
+        
         postsWithUsers.push({
             id: post.id,
             content: post.content,
             created_at: post.created_at,
             user_id: post.user_id,
             users: {
-                username: user?.username || 'Inconnu',
+                username: user?.username || `INCONNU_ID_${post.user_id}`,
                 rank: user?.rank || 'user'
             }
         });
     }
     
-    console.log("Posts à afficher:", postsWithUsers.length);
+    console.log("Posts formatés:", postsWithUsers.length);
+    console.log("=== FIN DÉBOGAGE ===");
+    
     res.render('index', { user: req.session.user, posts: postsWithUsers });
 });
 
