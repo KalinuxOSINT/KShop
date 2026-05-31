@@ -39,4 +39,5 @@ a.profile-link {
 a.profile-link:hover {
     text-decoration: underline;
     color: #00ffcc;
+  .report-btn{background:#ffaa00;color:black;padding:0.2rem 0.5rem;font-size:0.7rem;border:none;border-radius:1rem;cursor:pointer;margin-left:0.5rem;}
 }
