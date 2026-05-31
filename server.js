@@ -81,32 +81,40 @@ app.get('/logout', (req, res) => {
 
 // ========== FIL D'ACTUALITÉ ==========
 app.get('/', requireAuth, async (req, res) => {
-    const { data: posts, error } = await supabase
+    // 1. Récupérer tous les posts
+    const { data: posts, error: postsError } = await supabase
         .from('posts')
-        .select(`
-            id,
-            content,
-            created_at,
-            user_id,
-            users (id, username, rank)
-        `)
+        .select('*')
         .order('created_at', { ascending: false });
     
-    if (error) {
-        console.error("Erreur Supabase:", error);
+    if (postsError) {
+        console.error("Erreur posts:", postsError);
         return res.render('index', { user: req.session.user, posts: [] });
     }
     
-    const formattedPosts = posts.map(post => ({
-        id: post.id,
-        content: post.content,
-        created_at: post.created_at,
-        user_id: post.user_id,
-        users: {
-            username: post.users?.username || 'Inconnu',
-            rank: post.users?.rank || 'user'
-        }
-    }));
+    // 2. Pour chaque post, récupérer l'utilisateur
+    const postsWithUsers = [];
+    for (const post of posts) {
+        const { data: user, error: userError } = await supabase
+            .from('users')
+            .select('username, rank')
+            .eq('id', post.user_id)
+            .single();
+        
+        postsWithUsers.push({
+            id: post.id,
+            content: post.content,
+            created_at: post.created_at,
+            user_id: post.user_id,
+            users: {
+                username: user?.username || 'Inconnu',
+                rank: user?.rank || 'user'
+            }
+        });
+    }
+    
+    res.render('index', { user: req.session.user, posts: postsWithUsers });
+});
     
     res.render('index', { user: req.session.user, posts: formattedPosts });
 });
