@@ -79,38 +79,42 @@ app.get('/logout', (req, res) => {
     res.redirect('/');
 });
 
-// ========== FIL D'ACTUALITÉ ==========
+// ========== FIL D'ACTUALITÉ (VERSION FIABLE) ==========
 app.get('/', requireAuth, async (req, res) => {
-    // Récupérer les posts avec les infos utilisateur
-    const { data: posts, error } = await supabase
+    // 1. Récupérer tous les posts
+    const { data: posts, error: postsError } = await supabase
         .from('posts')
-        .select(`
-            id,
-            content,
-            created_at,
-            user_id,
-            users (username, rank)
-        `)
+        .select('*')
         .order('created_at', { ascending: false });
     
-    if (error) {
-        console.error("Erreur Supabase:", error);
+    if (postsError) {
+        console.error("Erreur posts:", postsError);
         return res.render('index', { user: req.session.user, posts: [] });
     }
     
-    // Formater les données
-    const formattedPosts = posts.map(post => ({
-        id: post.id,
-        content: post.content,
-        created_at: post.created_at,
-        user_id: post.user_id,
-        users: {
-            username: post.users?.username || 'Inconnu',
-            rank: post.users?.rank || 'user'
-        }
-    }));
+    // 2. Pour chaque post, récupérer l'utilisateur
+    const postsWithUsers = [];
+    for (const post of posts) {
+        const { data: user, error: userError } = await supabase
+            .from('users')
+            .select('username, rank')
+            .eq('id', post.user_id)
+            .single();
+        
+        postsWithUsers.push({
+            id: post.id,
+            content: post.content,
+            created_at: post.created_at,
+            user_id: post.user_id,
+            users: {
+                username: user?.username || 'Inconnu',
+                rank: user?.rank || 'user'
+            }
+        });
+    }
     
-    res.render('index', { user: req.session.user, posts: formattedPosts });
+    console.log("Posts à afficher:", postsWithUsers.length);
+    res.render('index', { user: req.session.user, posts: postsWithUsers });
 });
 
 app.post('/api/post', requireAuth, async (req, res) => {
@@ -125,7 +129,6 @@ app.post('/api/post', requireAuth, async (req, res) => {
     res.json({ success: true });
 });
 
-// Supprimer un post
 app.post('/api/post/delete', requireAuth, async (req, res) => {
     const { postId } = req.body;
     
@@ -301,7 +304,6 @@ app.post('/api/messages/send', requireAuth, async (req, res) => {
     res.json({ success: true });
 });
 
-// Upload de fichier
 app.post('/api/messages/upload', requireAuth, upload.single('file'), async (req, res) => {
     const { receiver_id } = req.body;
     const file = req.file;
@@ -366,7 +368,7 @@ app.post('/api/profile/bio', requireAuth, async (req, res) => {
     res.json({ success: true });
 });
 
-// ========== ADMIN : GESTION DES UTILISATEURS ==========
+// ========== ADMIN ==========
 app.get('/admin/users', requireAdmin, async (req, res) => {
     res.render('admin-users');
 });
@@ -433,7 +435,7 @@ app.get('/admin', requireAdmin, (req, res) => {
     res.redirect('/admin/users');
 });
 
-// ========== SYSTÈME DE MESSAGES / TICKETS ==========
+// ========== TICKETS ==========
 app.get('/contact', requireAuth, (req, res) => {
     res.render('contact', { user: req.session.user });
 });
