@@ -2,10 +2,6 @@
 <html>
 <head>
     <title>KaliNet - Fil d'actualité</title>
-    <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#00ffcc">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <style>
         body{background:#0a0c12;color:#eee;font-family:Arial;padding:2rem;}
         .container{max-width:800px;margin:0 auto;}
@@ -17,6 +13,9 @@
         .rank-badge{font-size:0.7rem;padding:0.1rem 0.4rem;border-radius:1rem;background:#2a2e3f;}
         .delete-btn{background:#ff4444;color:white;padding:0.2rem 0.5rem;font-size:0.7rem;border:none;border-radius:1rem;cursor:pointer;margin-left:0.5rem;}
         .delete-btn:hover{background:#cc0000;}
+        /* NOUVEAU STYLE POUR LE BOUTON SIGNALER */
+        .report-btn{background:#ffaa00;color:black;padding:0.2rem 0.5rem;font-size:0.7rem;border:none;border-radius:1rem;cursor:pointer;margin-left:0.5rem;}
+        .report-btn:hover{background:#ff8800;}
         #unreadBadge{background:#ff4444;color:white;border-radius:50%;padding:0.1rem 0.4rem;font-size:0.7rem;margin-left:0.3rem;}
     </style>
 </head>
@@ -31,6 +30,7 @@
         <a href="/my-tickets">📋 Mes tickets</a>
         <% if (user.is_admin) { %>
             <a href="/admin/users" style="color:#ff4444;">👑 Admin</a>
+            <a href="/admin/reports" style="color:#ffaa00;">🚩 Signalements</a>
             <a href="/admin/messages" id="adminMessagesLink" style="position:relative;">
                 📩 Messages <span id="unreadBadge">0</span>
             </a>
@@ -45,7 +45,6 @@
     <h2>📰 Fil d'actualité</h2>
     <div id="postsContainer">
         <% posts.forEach(post => { %>
-        <button class="report-btn" onclick="reportPost(<%= post.id %>)">🚩 Signaler</button>
             <div class="post-card" id="post-<%= post.id %>">
                 <div>
                     <a href="/profile/<%= post.user_id %>" class="profile-link" style="color:#00ffcc; text-decoration:none;">
@@ -59,8 +58,13 @@
                         <% } else if (post.users.rank === 'banned') { %>🔒
                         <% } else { %>👤<% } %>
                     </span>
+                    <!-- BOUTON SUPPRIMER (admin ou auteur) -->
                     <% if (user.is_admin || user.id === post.user_id) { %>
                         <button class="delete-btn" onclick="deletePost(<%= post.id %>)">🗑️ Supprimer</button>
+                    <% } %>
+                    <!-- NOUVEAU BOUTON SIGNALER (tout le monde, sauf l'auteur et admin) -->
+                    <% if (!user.is_admin && user.id !== post.user_id) { %>
+                        <button class="report-btn" onclick="reportPost(<%= post.id %>)">🚩 Signaler</button>
                     <% } %>
                 </div>
                 <div style="font-size:0.8rem;"><%= new Date(post.created_at).toLocaleString() %></div>
@@ -92,6 +96,23 @@
         }
     }
 
+    // NOUVELLE FONCTION SIGNALER (à ajouter DANS LE SCRIPT, avant checkUnreadMessages)
+    async function reportPost(postId) {
+        const reason = prompt('Pourquoi signalez-vous ce post ? (max 500 caractères)');
+        if (!reason) return;
+        const res = await fetch('/api/post/report', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ postId, reason })
+        });
+        if (res.ok) {
+            alert('✅ Signalement envoyé. Merci !');
+        } else {
+            const data = await res.json();
+            alert('❌ ' + (data.error || 'Erreur'));
+        }
+    }
+
     async function checkUnreadMessages() {
         <% if (user.is_admin) { %>
             const res = await fetch('/api/admin/messages/unread-count');
@@ -106,13 +127,6 @@
     }
     setInterval(checkUnreadMessages, 30000);
     checkUnreadMessages();
-</script>
-<script>
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('Service Worker enregistré', reg))
-            .catch(err => console.error('Erreur SW:', err));
-    }
 </script>
 </body>
 </html>
