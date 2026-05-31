@@ -13,7 +13,6 @@
         .rank-badge{font-size:0.7rem;padding:0.1rem 0.4rem;border-radius:1rem;background:#2a2e3f;}
         .delete-btn{background:#ff4444;color:white;padding:0.2rem 0.5rem;font-size:0.7rem;border:none;border-radius:1rem;cursor:pointer;margin-left:0.5rem;}
         .delete-btn:hover{background:#cc0000;}
-        /* NOUVEAU STYLE POUR LE BOUTON SIGNALER */
         .report-btn{background:#ffaa00;color:black;padding:0.2rem 0.5rem;font-size:0.7rem;border:none;border-radius:1rem;cursor:pointer;margin-left:0.5rem;}
         .report-btn:hover{background:#ff8800;}
         #unreadBadge{background:#ff4444;color:white;border-radius:50%;padding:0.1rem 0.4rem;font-size:0.7rem;margin-left:0.3rem;}
@@ -43,7 +42,9 @@
     <button onclick="sendPost()">📤 Publier</button>
 
     <h2>📰 Fil d'actualité</h2>
-    <div id="postsContainer">
+    <% if (posts.length === 0) { %>
+        <p style="color:#ffaa00;">⚠️ Aucun post à afficher. Sois le premier à publier !</p>
+    <% } else { %>
         <% posts.forEach(post => { %>
             <div class="post-card" id="post-<%= post.id %>">
                 <div>
@@ -58,11 +59,9 @@
                         <% } else if (post.users.rank === 'banned') { %>🔒
                         <% } else { %>👤<% } %>
                     </span>
-                    <!-- BOUTON SUPPRIMER (admin ou auteur) -->
                     <% if (user.is_admin || user.id === post.user_id) { %>
                         <button class="delete-btn" onclick="deletePost(<%= post.id %>)">🗑️ Supprimer</button>
                     <% } %>
-                    <!-- NOUVEAU BOUTON SIGNALER (tout le monde, sauf l'auteur et admin) -->
                     <% if (!user.is_admin && user.id !== post.user_id) { %>
                         <button class="report-btn" onclick="reportPost(<%= post.id %>)">🚩 Signaler</button>
                     <% } %>
@@ -71,7 +70,7 @@
                 <p><%= post.content %></p>
             </div>
         <% }) %>
-    </div>
+    <% } %>
 </div>
 <script>
     async function sendPost() {
@@ -96,7 +95,6 @@
         }
     }
 
-    // NOUVELLE FONCTION SIGNALER (à ajouter DANS LE SCRIPT, avant checkUnreadMessages)
     async function reportPost(postId) {
         const reason = prompt('Pourquoi signalez-vous ce post ? (max 500 caractères)');
         if (!reason) return;
