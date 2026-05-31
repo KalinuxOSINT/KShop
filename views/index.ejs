@@ -45,6 +45,7 @@
     <h2>📰 Fil d'actualité</h2>
     <div id="postsContainer">
         <% posts.forEach(post => { %>
+        <button class="report-btn" onclick="reportPost(<%= post.id %>)">🚩 Signaler</button>
             <div class="post-card" id="post-<%= post.id %>">
                 <div>
                     <a href="/profile/<%= post.user_id %>" class="profile-link" style="color:#00ffcc; text-decoration:none;">
