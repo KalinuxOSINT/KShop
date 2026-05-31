@@ -81,40 +81,34 @@ app.get('/logout', (req, res) => {
 
 // ========== FIL D'ACTUALITÉ ==========
 app.get('/', requireAuth, async (req, res) => {
-    // 1. Récupérer tous les posts
-    const { data: posts, error: postsError } = await supabase
+    // Récupérer les posts avec les infos utilisateur
+    const { data: posts, error } = await supabase
         .from('posts')
-        .select('*')
+        .select(`
+            id,
+            content,
+            created_at,
+            user_id,
+            users (username, rank)
+        `)
         .order('created_at', { ascending: false });
     
-    if (postsError) {
-        console.error("Erreur posts:", postsError);
+    if (error) {
+        console.error("Erreur Supabase:", error);
         return res.render('index', { user: req.session.user, posts: [] });
     }
     
-    // 2. Pour chaque post, récupérer l'utilisateur
-    const postsWithUsers = [];
-    for (const post of posts) {
-        const { data: user, error: userError } = await supabase
-            .from('users')
-            .select('username, rank')
-            .eq('id', post.user_id)
-            .single();
-        
-        postsWithUsers.push({
-            id: post.id,
-            content: post.content,
-            created_at: post.created_at,
-            user_id: post.user_id,
-            users: {
-                username: user?.username || 'Inconnu',
-                rank: user?.rank || 'user'
-            }
-        });
-    }
-    
-    res.render('index', { user: req.session.user, posts: postsWithUsers });
-});
+    // Formater les données
+    const formattedPosts = posts.map(post => ({
+        id: post.id,
+        content: post.content,
+        created_at: post.created_at,
+        user_id: post.user_id,
+        users: {
+            username: post.users?.username || 'Inconnu',
+            rank: post.users?.rank || 'user'
+        }
+    }));
     
     res.render('index', { user: req.session.user, posts: formattedPosts });
 });
@@ -131,7 +125,7 @@ app.post('/api/post', requireAuth, async (req, res) => {
     res.json({ success: true });
 });
 
-// Supprimer un post (admin ou auteur)
+// Supprimer un post
 app.post('/api/post/delete', requireAuth, async (req, res) => {
     const { postId } = req.body;
     
