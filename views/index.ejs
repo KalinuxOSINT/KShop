@@ -106,5 +106,12 @@
     setInterval(checkUnreadMessages, 30000);
     checkUnreadMessages();
 </script>
+<script>
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('Service Worker enregistré', reg))
+            .catch(err => console.error('Erreur SW:', err));
+    }
+</script>
 </body>
 </html>
