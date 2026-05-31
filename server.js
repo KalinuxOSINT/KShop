@@ -418,6 +418,75 @@ app.post('/api/messages/upload', requireAuth, upload.single('file'), async (req,
     if (msgError) return res.status(500).json({ error: msgError.message });
     res.json({ success: true, fileUrl });
 });
+// ========== SIGNALEMENTS ==========
+
+// Signaler un post
+app.post('/api/post/report', requireAuth, async (req, res) => {
+    const { postId, reason } = req.body;
+    if (!postId || !reason) return res.status(400).json({ error: 'Post ID et raison requis' });
+    if (reason.length > 500) return res.status(400).json({ error: 'Raison trop longue' });
+    
+    const { data: existing } = await supabase
+        .from('reports')
+        .select('id')
+        .eq('post_id', postId)
+        .eq('reporter_id', req.session.userId)
+        .single();
+    
+    if (existing) return res.status(400).json({ error: 'Vous avez déjà signalé ce post' });
+    
+    const { error } = await supabase
+        .from('reports')
+        .insert({ post_id: postId, reporter_id: req.session.userId, reason });
+    
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+});
+
+// Admin : voir tous les signalements
+app.get('/admin/reports', requireAdmin, async (req, res) => {
+    const { data: reports, error } = await supabase
+        .from('reports')
+        .select(`
+            *,
+            posts(id, content, users(id, username)),
+            reporter:users!reports_reporter_id_fkey(id, username)
+        `)
+        .order('created_at', { ascending: false });
+    
+    res.render('admin-reports', { user: req.session.user, reports: reports || [] });
+});
+
+// Admin : supprimer un post depuis un signalement
+app.post('/api/admin/reports/delete-post', requireAdmin, async (req, res) => {
+    const { postId, reportId } = req.body;
+    
+    const { error: postError } = await supabase
+        .from('posts')
+        .delete()
+        .eq('id', postId);
+    
+    if (postError) return res.status(500).json({ error: postError.message });
+    
+    await supabase
+        .from('reports')
+        .update({ status: 'resolved' })
+        .eq('id', reportId);
+    
+    res.json({ success: true });
+});
+
+// Admin : ignorer un signalement
+app.post('/api/admin/reports/ignore', requireAdmin, async (req, res) => {
+    const { reportId } = req.body;
+    
+    await supabase
+        .from('reports')
+        .update({ status: 'ignored' })
+        .eq('id', reportId);
+    
+    res.json({ success: true });
+});
 // ========== DÉMARRAGE ==========
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ KaliNet sur http://0.0.0.0:${PORT}`);
