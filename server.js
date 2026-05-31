@@ -4,6 +4,8 @@ const session = require('express-session');
 const bcrypt = require('bcrypt');
 const { createClient } = require('@supabase/supabase-js');
 const path = require('path');
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -82,12 +84,31 @@ app.get('/', requireAuth, async (req, res) => {
     const { data: posts, error } = await supabase
         .from('posts')
         .select(`
-            *,
-            users (username, rank)
+            id,
+            content,
+            created_at,
+            user_id,
+            users (id, username, rank)
         `)
         .order('created_at', { ascending: false });
     
-    res.render('index', { user: req.session.user, posts: posts || [] });
+    if (error) {
+        console.error("Erreur Supabase:", error);
+        return res.render('index', { user: req.session.user, posts: [] });
+    }
+    
+    const formattedPosts = posts.map(post => ({
+        id: post.id,
+        content: post.content,
+        created_at: post.created_at,
+        user_id: post.user_id,
+        users: {
+            username: post.users?.username || 'Inconnu',
+            rank: post.users?.rank || 'user'
+        }
+    }));
+    
+    res.render('index', { user: req.session.user, posts: formattedPosts });
 });
 
 app.post('/api/post', requireAuth, async (req, res) => {
@@ -127,6 +148,71 @@ app.post('/api/post/delete', requireAuth, async (req, res) => {
         .eq('id', postId);
     
     if (deleteError) return res.status(500).json({ error: deleteError.message });
+    res.json({ success: true });
+});
+
+// ========== SIGNALEMENTS ==========
+app.post('/api/post/report', requireAuth, async (req, res) => {
+    const { postId, reason } = req.body;
+    if (!postId || !reason) return res.status(400).json({ error: 'Post ID et raison requis' });
+    if (reason.length > 500) return res.status(400).json({ error: 'Raison trop longue' });
+    
+    const { data: existing } = await supabase
+        .from('reports')
+        .select('id')
+        .eq('post_id', postId)
+        .eq('reporter_id', req.session.userId)
+        .single();
+    
+    if (existing) return res.status(400).json({ error: 'Vous avez déjà signalé ce post' });
+    
+    const { error } = await supabase
+        .from('reports')
+        .insert({ post_id: postId, reporter_id: req.session.userId, reason });
+    
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+});
+
+app.get('/admin/reports', requireAdmin, async (req, res) => {
+    const { data: reports, error } = await supabase
+        .from('reports')
+        .select(`
+            *,
+            posts(id, content, users(id, username)),
+            reporter:users!reports_reporter_id_fkey(id, username)
+        `)
+        .order('created_at', { ascending: false });
+    
+    res.render('admin-reports', { user: req.session.user, reports: reports || [] });
+});
+
+app.post('/api/admin/reports/delete-post', requireAdmin, async (req, res) => {
+    const { postId, reportId } = req.body;
+    
+    const { error: postError } = await supabase
+        .from('posts')
+        .delete()
+        .eq('id', postId);
+    
+    if (postError) return res.status(500).json({ error: postError.message });
+    
+    await supabase
+        .from('reports')
+        .update({ status: 'resolved' })
+        .eq('id', reportId);
+    
+    res.json({ success: true });
+});
+
+app.post('/api/admin/reports/ignore', requireAdmin, async (req, res) => {
+    const { reportId } = req.body;
+    
+    await supabase
+        .from('reports')
+        .update({ status: 'ignored' })
+        .eq('id', reportId);
+    
     res.json({ success: true });
 });
 
@@ -211,6 +297,37 @@ app.post('/api/messages/send', requireAuth, async (req, res) => {
     
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true });
+});
+
+// Upload de fichier
+app.post('/api/messages/upload', requireAuth, upload.single('file'), async (req, res) => {
+    const { receiver_id } = req.body;
+    const file = req.file;
+    
+    if (!file) return res.status(400).json({ error: 'Aucun fichier' });
+    if (file.size > 10 * 1024 * 1024) return res.status(400).json({ error: 'Fichier trop gros (max 10MB)' });
+    
+    const fileExt = file.originalname.split('.').pop();
+    const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+    
+    const { data, error } = await supabase.storage
+        .from('kalinet-files')
+        .upload(fileName, file.buffer, { contentType: file.mimetype });
+    
+    if (error) return res.status(500).json({ error: error.message });
+    
+    const fileUrl = `${process.env.SUPABASE_URL}/storage/v1/object/public/kalinet-files/${fileName}`;
+    
+    const { error: msgError } = await supabase
+        .from('messages')
+        .insert({
+            sender_id: req.session.userId,
+            receiver_id: parseInt(receiver_id),
+            content: `📎 ${file.originalname} : ${fileUrl}`
+        });
+    
+    if (msgError) return res.status(500).json({ error: msgError.message });
+    res.json({ success: true, fileUrl });
 });
 
 // ========== PROFIL ==========
@@ -310,13 +427,11 @@ app.post('/api/admin/users/delete', requireAdmin, async (req, res) => {
     res.json({ success: true });
 });
 
-// Redirection ancien admin
 app.get('/admin', requireAdmin, (req, res) => {
     res.redirect('/admin/users');
 });
 
 // ========== SYSTÈME DE MESSAGES / TICKETS ==========
-
 app.get('/contact', requireAuth, (req, res) => {
     res.render('contact', { user: req.session.user });
 });
@@ -376,7 +491,6 @@ app.post('/api/admin/messages/resolve', requireAdmin, async (req, res) => {
     res.json({ success: true });
 });
 
-// API : compter les messages sans réponse (pour notification admin)
 app.get('/api/admin/messages/unread-count', requireAdmin, async (req, res) => {
     const { count, error } = await supabase
         .from('contact_messages')
@@ -386,107 +500,7 @@ app.get('/api/admin/messages/unread-count', requireAdmin, async (req, res) => {
     if (error) return res.status(500).json({ error: error.message });
     res.json({ count: count || 0 });
 });
-const multer = require('multer');
-const upload = multer({ storage: multer.memoryStorage() });
 
-app.post('/api/messages/upload', requireAuth, upload.single('file'), async (req, res) => {
-    const { receiver_id } = req.body;
-    const file = req.file;
-    
-    if (!file) return res.status(400).json({ error: 'Aucun fichier' });
-    if (file.size > 10 * 1024 * 1024) return res.status(400).json({ error: 'Fichier trop gros (max 10MB)' });
-    
-    const fileExt = file.originalname.split('.').pop();
-    const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-    
-    const { data, error } = await supabase.storage
-        .from('kalinet-files')
-        .upload(fileName, file.buffer, { contentType: file.mimetype });
-    
-    if (error) return res.status(500).json({ error: error.message });
-    
-    const fileUrl = `${process.env.SUPABASE_URL}/storage/v1/object/public/kalinet-files/${fileName}`;
-    
-    const { error: msgError } = await supabase
-        .from('messages')
-        .insert({
-            sender_id: req.session.userId,
-            receiver_id: parseInt(receiver_id),
-            content: `📎 ${file.originalname} : ${fileUrl}`
-        });
-    
-    if (msgError) return res.status(500).json({ error: msgError.message });
-    res.json({ success: true, fileUrl });
-});
-// ========== SIGNALEMENTS ==========
-
-// Signaler un post
-app.post('/api/post/report', requireAuth, async (req, res) => {
-    const { postId, reason } = req.body;
-    if (!postId || !reason) return res.status(400).json({ error: 'Post ID et raison requis' });
-    if (reason.length > 500) return res.status(400).json({ error: 'Raison trop longue' });
-    
-    const { data: existing } = await supabase
-        .from('reports')
-        .select('id')
-        .eq('post_id', postId)
-        .eq('reporter_id', req.session.userId)
-        .single();
-    
-    if (existing) return res.status(400).json({ error: 'Vous avez déjà signalé ce post' });
-    
-    const { error } = await supabase
-        .from('reports')
-        .insert({ post_id: postId, reporter_id: req.session.userId, reason });
-    
-    if (error) return res.status(500).json({ error: error.message });
-    res.json({ success: true });
-});
-
-// Admin : voir tous les signalements
-app.get('/admin/reports', requireAdmin, async (req, res) => {
-    const { data: reports, error } = await supabase
-        .from('reports')
-        .select(`
-            *,
-            posts(id, content, users(id, username)),
-            reporter:users!reports_reporter_id_fkey(id, username)
-        `)
-        .order('created_at', { ascending: false });
-    
-    res.render('admin-reports', { user: req.session.user, reports: reports || [] });
-});
-
-// Admin : supprimer un post depuis un signalement
-app.post('/api/admin/reports/delete-post', requireAdmin, async (req, res) => {
-    const { postId, reportId } = req.body;
-    
-    const { error: postError } = await supabase
-        .from('posts')
-        .delete()
-        .eq('id', postId);
-    
-    if (postError) return res.status(500).json({ error: postError.message });
-    
-    await supabase
-        .from('reports')
-        .update({ status: 'resolved' })
-        .eq('id', reportId);
-    
-    res.json({ success: true });
-});
-
-// Admin : ignorer un signalement
-app.post('/api/admin/reports/ignore', requireAdmin, async (req, res) => {
-    const { reportId } = req.body;
-    
-    await supabase
-        .from('reports')
-        .update({ status: 'ignored' })
-        .eq('id', reportId);
-    
-    res.json({ success: true });
-});
 // ========== DÉMARRAGE ==========
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ KaliNet sur http://0.0.0.0:${PORT}`);
