@@ -34,19 +34,37 @@
             justify-content:space-between;
             align-items:center;
         }
-        .nav{display:flex;gap:1rem;margin-bottom:2rem;flex-wrap:wrap;}
-        .nav a{background:transparent;color:#00ffcc;padding:0;}
-        .nav a:hover{text-decoration:underline;}
+        /* STYLE POUR LA BARRE DE NAVIGATION */
+        .nav{
+            display:flex;
+            gap:1rem;
+            margin-bottom:2rem;
+            flex-wrap:wrap;
+            border-bottom:1px solid #2a2e3f;
+            padding-bottom:1rem;
+        }
+        .nav a{
+            background:transparent;
+            color:#00ffcc;
+            padding:0;
+        }
+        .nav a:hover{
+            text-decoration:underline;
+        }
     </style>
 </head>
 <body>
 <div class="container">
+    <!-- ========== BARRE DE NAVIGATION ========== -->
+    <!-- C'est ICI qu'il faut ajouter les liens -->
     <div class="nav">
         <a href="/">🏠 Accueil</a>
         <a href="/admin/users">👥 Utilisateurs</a>
         <a href="/admin/messages">📩 Messages reçus</a>
+        <a href="/admin/reports">🚩 Signalements</a>
         <a href="/logout">🚪 Déconnexion</a>
     </div>
+    <!-- ========== FIN BARRE DE NAVIGATION ========== -->
 
     <h1>👑 Panel Admin</h1>
 
