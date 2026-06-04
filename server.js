@@ -29,7 +29,7 @@ app.use(session({
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// ========== FONCTIONS D'AUTH (avec rafraîchissement du rang à chaque requête) ==========
+// ========== FONCTIONS D'AUTH (avec rafraîchissement du rang) ==========
 async function requireAuth(req, res, next) {
     if (!req.session.userId) return res.redirect('/login');
     
@@ -63,10 +63,19 @@ function requireAdmin(req, res, next) {
     next();
 }
 
-// ========== AUTH ==========
+// ========== ROUTES PUBLIQUES ==========
 app.get('/login', (req, res) => { res.render('login'); });
 app.get('/register', (req, res) => { res.render('register'); });
 
+// ========== DÉCONNEXION (redirige vers /login) ==========
+app.get('/logout', (req, res) => {
+    req.session.destroy((err) => {
+        if (err) console.error(err);
+        res.redirect('/login');
+    });
+});
+
+// ========== AUTH POST ==========
 app.post('/login', async (req, res) => {
     const { username, password } = req.body;
     const { data: user, error } = await supabase
@@ -79,7 +88,6 @@ app.post('/login', async (req, res) => {
         return res.send('❌ Identifiants invalides. <a href="/login">Réessayer</a>');
     }
     
-    // Vérifier si l'utilisateur est banni à la connexion
     if (user.rank === 'banned') {
         return res.send('⛔ Ce compte est banni. Contactez l\'administrateur.');
     }
@@ -101,15 +109,8 @@ app.post('/register', async (req, res) => {
     res.redirect('/login');
 });
 
-// Route de déconnexion (sans middleware, pour permettre la déconnexion même si la session est corrompue)
-app.get('/logout', (req, res) => {
-    req.session.destroy();
-    res.redirect('/');
-});
-
 // ========== FIL D'ACTUALITÉ ==========
 app.get('/', requireAuth, async (req, res) => {
-    // Récupérer les posts sans ceux des bannis
     const { data: posts, error } = await supabase
         .from('posts')
         .select(`
@@ -153,7 +154,6 @@ app.post('/api/post', requireAuth, async (req, res) => {
     res.json({ success: true });
 });
 
-// Supprimer un post (admin ou auteur)
 app.post('/api/post/delete', requireAuth, async (req, res) => {
     const { postId } = req.body;
     
@@ -252,7 +252,7 @@ app.get('/messages', requireAuth, async (req, res) => {
         .from('users')
         .select('id, username, rank')
         .neq('id', req.session.userId)
-        .neq('rank', 'banned');  // exclure les bannis des conversations
+        .neq('rank', 'banned');
     
     const conversations = [];
     for (const otherUser of (users || [])) {
@@ -323,7 +323,6 @@ app.post('/api/messages/send', requireAuth, async (req, res) => {
     const { receiver_id, content } = req.body;
     if (!content || content.length > 1000) return res.status(400).json({ error: 'Message trop long' });
     
-    // Vérifier que le destinataire n'est pas banni
     const { data: receiver } = await supabase
         .from('users')
         .select('rank')
@@ -341,7 +340,6 @@ app.post('/api/messages/send', requireAuth, async (req, res) => {
     res.json({ success: true });
 });
 
-// Upload de fichier
 app.post('/api/messages/upload', requireAuth, upload.single('file'), async (req, res) => {
     const { receiver_id } = req.body;
     const file = req.file;
@@ -477,7 +475,7 @@ app.get('/admin', requireAdmin, (req, res) => {
     res.redirect('/admin/users');
 });
 
-// ========== TICKETS (contact) ==========
+// ========== TICKETS ==========
 app.get('/contact', requireAuth, (req, res) => {
     res.render('contact', { user: req.session.user });
 });
