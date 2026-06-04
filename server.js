@@ -29,23 +29,37 @@ app.use(session({
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// ========== FONCTIONS D'AUTH ==========
-function requireAuth(req, res, next) {
+// ========== FONCTIONS D'AUTH (avec rafraîchissement du rang à chaque requête) ==========
+async function requireAuth(req, res, next) {
     if (!req.session.userId) return res.redirect('/login');
+    
+    // Recharger l'utilisateur depuis la base pour être sûr du rang
+    const { data: user, error } = await supabase
+        .from('users')
+        .select('id, username, is_admin, rank, bio, avatar')
+        .eq('id', req.session.userId)
+        .single();
+    
+    if (error || !user) {
+        req.session.destroy();
+        return res.redirect('/login');
+    }
+    
+    // Mettre à jour la session avec les infos récentes
+    req.session.user = user;
+    
+    // Bloquer les bannis
+    if (user.rank === 'banned') {
+        req.session.destroy();
+        return res.status(403).send('⛔ Vous êtes banni. Contactez l\'administrateur.');
+    }
+    
     next();
 }
 
 function requireAdmin(req, res, next) {
     if (!req.session.userId) return res.redirect('/login');
     if (!req.session.user?.is_admin) return res.status(403).send('🔒 Accès admin refusé');
-    next();
-}
-
-// 🚫 VÉRIFICATION BANNI
-function requireNotBanned(req, res, next) {
-    if (req.session.user?.rank === 'banned') {
-        return res.status(403).send('⛔ Vous êtes banni. Vous ne pouvez pas accéder à cette page.');
-    }
     next();
 }
 
@@ -65,6 +79,11 @@ app.post('/login', async (req, res) => {
         return res.send('❌ Identifiants invalides. <a href="/login">Réessayer</a>');
     }
     
+    // Vérifier si l'utilisateur est banni à la connexion
+    if (user.rank === 'banned') {
+        return res.send('⛔ Ce compte est banni. Contactez l\'administrateur.');
+    }
+    
     req.session.userId = user.id;
     req.session.user = user;
     res.redirect('/');
@@ -82,13 +101,14 @@ app.post('/register', async (req, res) => {
     res.redirect('/login');
 });
 
+// Route de déconnexion (sans middleware, pour permettre la déconnexion même si la session est corrompue)
 app.get('/logout', (req, res) => {
     req.session.destroy();
     res.redirect('/');
 });
 
 // ========== FIL D'ACTUALITÉ ==========
-app.get('/', requireAuth, requireNotBanned, async (req, res) => {
+app.get('/', requireAuth, async (req, res) => {
     // Récupérer les posts sans ceux des bannis
     const { data: posts, error } = await supabase
         .from('posts')
@@ -121,7 +141,7 @@ app.get('/', requireAuth, requireNotBanned, async (req, res) => {
     res.render('index', { user: req.session.user, posts: formattedPosts });
 });
 
-app.post('/api/post', requireAuth, requireNotBanned, async (req, res) => {
+app.post('/api/post', requireAuth, async (req, res) => {
     const { content } = req.body;
     if (!content || content.length > 500) return res.status(400).json({ error: 'Message trop long' });
     
@@ -134,7 +154,7 @@ app.post('/api/post', requireAuth, requireNotBanned, async (req, res) => {
 });
 
 // Supprimer un post (admin ou auteur)
-app.post('/api/post/delete', requireAuth, requireNotBanned, async (req, res) => {
+app.post('/api/post/delete', requireAuth, async (req, res) => {
     const { postId } = req.body;
     
     const { data: post, error } = await supabase
@@ -162,7 +182,7 @@ app.post('/api/post/delete', requireAuth, requireNotBanned, async (req, res) => 
 });
 
 // ========== SIGNALEMENTS ==========
-app.post('/api/post/report', requireAuth, requireNotBanned, async (req, res) => {
+app.post('/api/post/report', requireAuth, async (req, res) => {
     const { postId, reason } = req.body;
     if (!postId || !reason) return res.status(400).json({ error: 'Post ID et raison requis' });
     if (reason.length > 500) return res.status(400).json({ error: 'Raison trop longue' });
@@ -227,7 +247,7 @@ app.post('/api/admin/reports/ignore', requireAdmin, async (req, res) => {
 });
 
 // ========== MESSAGERIE ==========
-app.get('/messages', requireAuth, requireNotBanned, async (req, res) => {
+app.get('/messages', requireAuth, async (req, res) => {
     const { data: users, error } = await supabase
         .from('users')
         .select('id, username, rank')
@@ -264,7 +284,7 @@ app.get('/messages', requireAuth, requireNotBanned, async (req, res) => {
     res.render('messages', { user: req.session.user, conversations });
 });
 
-app.get('/api/messages/:userId', requireAuth, requireNotBanned, async (req, res) => {
+app.get('/api/messages/:userId', requireAuth, async (req, res) => {
     const otherId = parseInt(req.params.userId);
     
     const { data: messages, error } = await supabase
@@ -278,7 +298,6 @@ app.get('/api/messages/:userId', requireAuth, requireNotBanned, async (req, res)
     
     if (error) return res.status(500).json({ error: error.message });
     
-    // Ne pas marquer comme lus si l'expéditeur est banni ? (optionnel)
     await supabase
         .from('messages')
         .update({ is_read: 1 })
@@ -300,11 +319,11 @@ app.get('/api/messages/:userId', requireAuth, requireNotBanned, async (req, res)
     res.json(formattedMessages);
 });
 
-app.post('/api/messages/send', requireAuth, requireNotBanned, async (req, res) => {
+app.post('/api/messages/send', requireAuth, async (req, res) => {
     const { receiver_id, content } = req.body;
     if (!content || content.length > 1000) return res.status(400).json({ error: 'Message trop long' });
     
-    // Vérifier que le destinataire n'est pas banni (optionnel)
+    // Vérifier que le destinataire n'est pas banni
     const { data: receiver } = await supabase
         .from('users')
         .select('rank')
@@ -322,8 +341,8 @@ app.post('/api/messages/send', requireAuth, requireNotBanned, async (req, res) =
     res.json({ success: true });
 });
 
-// Upload de fichier (bannis interdits)
-app.post('/api/messages/upload', requireAuth, requireNotBanned, upload.single('file'), async (req, res) => {
+// Upload de fichier
+app.post('/api/messages/upload', requireAuth, upload.single('file'), async (req, res) => {
     const { receiver_id } = req.body;
     const file = req.file;
     
@@ -354,7 +373,7 @@ app.post('/api/messages/upload', requireAuth, requireNotBanned, upload.single('f
 });
 
 // ========== PROFIL ==========
-app.get('/profile/:id', requireAuth, requireNotBanned, async (req, res) => {
+app.get('/profile/:id', requireAuth, async (req, res) => {
     const targetId = parseInt(req.params.id);
     
     const { data: targetUser, error } = await supabase
@@ -365,7 +384,6 @@ app.get('/profile/:id', requireAuth, requireNotBanned, async (req, res) => {
     
     if (error || !targetUser) return res.status(404).send('Utilisateur non trouvé');
     
-    // Si l'utilisateur ciblé est banni, ne pas afficher ses posts (optionnel)
     let posts = [];
     if (targetUser.rank !== 'banned') {
         const { data } = await supabase
@@ -379,7 +397,7 @@ app.get('/profile/:id', requireAuth, requireNotBanned, async (req, res) => {
     res.render('profile', { user: req.session.user, targetUser, posts });
 });
 
-app.post('/api/profile/bio', requireAuth, requireNotBanned, async (req, res) => {
+app.post('/api/profile/bio', requireAuth, async (req, res) => {
     const { bio } = req.body;
     if (bio.length > 300) return res.status(400).json({ error: 'Bio trop longue' });
     
@@ -460,11 +478,11 @@ app.get('/admin', requireAdmin, (req, res) => {
 });
 
 // ========== TICKETS (contact) ==========
-app.get('/contact', requireAuth, requireNotBanned, (req, res) => {
+app.get('/contact', requireAuth, (req, res) => {
     res.render('contact', { user: req.session.user });
 });
 
-app.post('/api/contact', requireAuth, requireNotBanned, async (req, res) => {
+app.post('/api/contact', requireAuth, async (req, res) => {
     const { subject, message } = req.body;
     if (!subject || !message) return res.status(400).json({ error: 'Sujet et message requis' });
     
@@ -476,7 +494,7 @@ app.post('/api/contact', requireAuth, requireNotBanned, async (req, res) => {
     res.json({ success: true });
 });
 
-app.get('/my-tickets', requireAuth, requireNotBanned, async (req, res) => {
+app.get('/my-tickets', requireAuth, async (req, res) => {
     const { data: tickets, error } = await supabase
         .from('contact_messages')
         .select('*')
