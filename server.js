@@ -29,11 +29,10 @@ app.use(session({
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// ========== FONCTIONS D'AUTH (avec rafraîchissement du rang) ==========
+// ========== FONCTIONS D'AUTH ==========
 async function requireAuth(req, res, next) {
     if (!req.session.userId) return res.redirect('/login');
     
-    // Recharger l'utilisateur depuis la base pour être sûr du rang
     const { data: user, error } = await supabase
         .from('users')
         .select('id, username, is_admin, rank, bio, avatar')
@@ -45,15 +44,11 @@ async function requireAuth(req, res, next) {
         return res.redirect('/login');
     }
     
-    // Mettre à jour la session avec les infos récentes
     req.session.user = user;
-    
-    // Bloquer les bannis
     if (user.rank === 'banned') {
         req.session.destroy();
-        return res.status(403).send('⛔ Vous êtes banni. Contactez l\'administrateur.');
+        return res.status(403).send('⛔ Vous êtes banni.');
     }
-    
     next();
 }
 
@@ -67,15 +62,10 @@ function requireAdmin(req, res, next) {
 app.get('/login', (req, res) => { res.render('login'); });
 app.get('/register', (req, res) => { res.render('register'); });
 
-// ========== DÉCONNEXION (redirige vers /login) ==========
 app.get('/logout', (req, res) => {
-    req.session.destroy((err) => {
-        if (err) console.error(err);
-        res.redirect('/login');
-    });
+    req.session.destroy(() => res.redirect('/login'));
 });
 
-// ========== AUTH POST ==========
 app.post('/login', async (req, res) => {
     const { username, password } = req.body;
     const { data: user, error } = await supabase
@@ -87,11 +77,9 @@ app.post('/login', async (req, res) => {
     if (error || !user || !(await bcrypt.compare(password, user.password))) {
         return res.send('❌ Identifiants invalides. <a href="/login">Réessayer</a>');
     }
-    
     if (user.rank === 'banned') {
-        return res.send('⛔ Ce compte est banni. Contactez l\'administrateur.');
+        return res.send('⛔ Ce compte est banni.');
     }
-    
     req.session.userId = user.id;
     req.session.user = user;
     res.redirect('/');
@@ -100,12 +88,10 @@ app.post('/login', async (req, res) => {
 app.post('/register', async (req, res) => {
     const { username, password } = req.body;
     const hashedPassword = await bcrypt.hash(password, 10);
-    
     const { error } = await supabase
         .from('users')
         .insert({ username, password: hashedPassword, rank: 'user' });
-    
-    if (error) return res.send('❌ Nom déjà pris. <a href="/register">Réessayer</a>');
+    if (error) return res.send('❌ Nom déjà pris.');
     res.redirect('/login');
 });
 
@@ -124,10 +110,9 @@ app.get('/', requireAuth, async (req, res) => {
         .order('created_at', { ascending: false });
     
     if (error) {
-        console.error("Erreur Supabase:", error);
+        console.error(error);
         return res.render('index', { user: req.session.user, posts: [] });
     }
-    
     const formattedPosts = posts.map(post => ({
         id: post.id,
         content: post.content,
@@ -138,22 +123,18 @@ app.get('/', requireAuth, async (req, res) => {
             rank: post.users?.rank || 'user'
         }
     }));
-    
     res.render('index', { user: req.session.user, posts: formattedPosts });
 });
 
 app.post('/api/post', requireAuth, async (req, res) => {
     const { content } = req.body;
     if (!content || content.length > 500) return res.status(400).json({ error: 'Message trop long' });
-    
-    const { error } = await supabase
-        .from('posts')
-        .insert({ user_id: req.session.userId, content });
-    
+    const { error } = await supabase.from('posts').insert({ user_id: req.session.userId, content });
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true });
 });
 
+// === ROUTE DE SUPPRESSION CORRIGÉE (admin peut tout supprimer) ===
 app.post('/api/post/delete', requireAuth, async (req, res) => {
     const { postId } = req.body;
     
@@ -166,7 +147,7 @@ app.post('/api/post/delete', requireAuth, async (req, res) => {
     if (error || !post) return res.status(404).json({ error: 'Post non trouvé' });
     
     const isAuthor = (post.user_id === req.session.userId);
-    const isAdmin = req.session.user && req.session.user.is_admin === 1;  // ← Vérification stricte
+    const isAdmin = req.session.user && req.session.user.is_admin === 1; // ← vérification stricte
     
     if (!isAuthor && !isAdmin) {
         return res.status(403).json({ error: 'Non autorisé' });
@@ -193,13 +174,11 @@ app.post('/api/post/report', requireAuth, async (req, res) => {
         .eq('post_id', postId)
         .eq('reporter_id', req.session.userId)
         .single();
-    
-    if (existing) return res.status(400).json({ error: 'Vous avez déjà signalé ce post' });
+    if (existing) return res.status(400).json({ error: 'Déjà signalé' });
     
     const { error } = await supabase
         .from('reports')
         .insert({ post_id: postId, reporter_id: req.session.userId, reason });
-    
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true });
 });
@@ -213,36 +192,20 @@ app.get('/admin/reports', requireAdmin, async (req, res) => {
             reporter:users!reports_reporter_id_fkey(id, username)
         `)
         .order('created_at', { ascending: false });
-    
     res.render('admin-reports', { user: req.session.user, reports: reports || [] });
 });
 
 app.post('/api/admin/reports/delete-post', requireAdmin, async (req, res) => {
     const { postId, reportId } = req.body;
-    
-    const { error: postError } = await supabase
-        .from('posts')
-        .delete()
-        .eq('id', postId);
-    
+    const { error: postError } = await supabase.from('posts').delete().eq('id', postId);
     if (postError) return res.status(500).json({ error: postError.message });
-    
-    await supabase
-        .from('reports')
-        .update({ status: 'resolved' })
-        .eq('id', reportId);
-    
+    await supabase.from('reports').update({ status: 'resolved' }).eq('id', reportId);
     res.json({ success: true });
 });
 
 app.post('/api/admin/reports/ignore', requireAdmin, async (req, res) => {
     const { reportId } = req.body;
-    
-    await supabase
-        .from('reports')
-        .update({ status: 'ignored' })
-        .eq('id', reportId);
-    
+    await supabase.from('reports').update({ status: 'ignored' }).eq('id', reportId);
     res.json({ success: true });
 });
 
@@ -253,7 +216,6 @@ app.get('/messages', requireAuth, async (req, res) => {
         .select('id, username, rank')
         .neq('id', req.session.userId)
         .neq('rank', 'banned');
-    
     const conversations = [];
     for (const otherUser of (users || [])) {
         const { data: lastMsg } = await supabase
@@ -262,14 +224,12 @@ app.get('/messages', requireAuth, async (req, res) => {
             .or(`and(sender_id.eq.${req.session.userId},receiver_id.eq.${otherUser.id}),and(sender_id.eq.${otherUser.id},receiver_id.eq.${req.session.userId})`)
             .order('created_at', { ascending: false })
             .limit(1);
-        
         const { count: unread } = await supabase
             .from('messages')
             .select('*', { count: 'exact', head: true })
             .eq('sender_id', otherUser.id)
             .eq('receiver_id', req.session.userId)
             .eq('is_read', 0);
-        
         conversations.push({
             id: otherUser.id,
             username: otherUser.username,
@@ -279,14 +239,12 @@ app.get('/messages', requireAuth, async (req, res) => {
             unread: unread || 0
         });
     }
-    
     conversations.sort((a, b) => (b.last_date || 0) - (a.last_date || 0));
     res.render('messages', { user: req.session.user, conversations });
 });
 
 app.get('/api/messages/:userId', requireAuth, async (req, res) => {
     const otherId = parseInt(req.params.userId);
-    
     const { data: messages, error } = await supabase
         .from('messages')
         .select(`
@@ -295,16 +253,11 @@ app.get('/api/messages/:userId', requireAuth, async (req, res) => {
         `)
         .or(`and(sender_id.eq.${req.session.userId},receiver_id.eq.${otherId}),and(sender_id.eq.${otherId},receiver_id.eq.${req.session.userId})`)
         .order('created_at', { ascending: true });
-    
     if (error) return res.status(500).json({ error: error.message });
-    
-    await supabase
-        .from('messages')
-        .update({ is_read: 1 })
+    await supabase.from('messages').update({ is_read: 1 })
         .eq('sender_id', otherId)
         .eq('receiver_id', req.session.userId)
         .eq('is_read', 0);
-    
     const formattedMessages = messages.map(m => ({
         id: m.id,
         sender_id: m.sender_id,
@@ -315,27 +268,17 @@ app.get('/api/messages/:userId', requireAuth, async (req, res) => {
         username: m.sender?.username,
         sender_rank: m.sender?.rank
     }));
-    
     res.json(formattedMessages);
 });
 
 app.post('/api/messages/send', requireAuth, async (req, res) => {
     const { receiver_id, content } = req.body;
     if (!content || content.length > 1000) return res.status(400).json({ error: 'Message trop long' });
-    
-    const { data: receiver } = await supabase
-        .from('users')
-        .select('rank')
-        .eq('id', receiver_id)
-        .single();
+    const { data: receiver } = await supabase.from('users').select('rank').eq('id', receiver_id).single();
     if (receiver?.rank === 'banned') {
-        return res.status(403).json({ error: "Impossible d'envoyer un message à un utilisateur banni." });
+        return res.status(403).json({ error: "Destinataire banni." });
     }
-    
-    const { error } = await supabase
-        .from('messages')
-        .insert({ sender_id: req.session.userId, receiver_id, content });
-    
+    const { error } = await supabase.from('messages').insert({ sender_id: req.session.userId, receiver_id, content });
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true });
 });
@@ -343,29 +286,18 @@ app.post('/api/messages/send', requireAuth, async (req, res) => {
 app.post('/api/messages/upload', requireAuth, upload.single('file'), async (req, res) => {
     const { receiver_id } = req.body;
     const file = req.file;
-    
     if (!file) return res.status(400).json({ error: 'Aucun fichier' });
-    if (file.size > 10 * 1024 * 1024) return res.status(400).json({ error: 'Fichier trop gros (max 10MB)' });
-    
+    if (file.size > 10 * 1024 * 1024) return res.status(400).json({ error: 'Fichier trop gros' });
     const fileExt = file.originalname.split('.').pop();
     const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-    
-    const { data, error } = await supabase.storage
-        .from('kalinet-files')
-        .upload(fileName, file.buffer, { contentType: file.mimetype });
-    
+    const { data, error } = await supabase.storage.from('kalinet-files').upload(fileName, file.buffer, { contentType: file.mimetype });
     if (error) return res.status(500).json({ error: error.message });
-    
     const fileUrl = `${process.env.SUPABASE_URL}/storage/v1/object/public/kalinet-files/${fileName}`;
-    
-    const { error: msgError } = await supabase
-        .from('messages')
-        .insert({
-            sender_id: req.session.userId,
-            receiver_id: parseInt(receiver_id),
-            content: `📎 ${file.originalname} : ${fileUrl}`
-        });
-    
+    const { error: msgError } = await supabase.from('messages').insert({
+        sender_id: req.session.userId,
+        receiver_id: parseInt(receiver_id),
+        content: `📎 ${file.originalname} : ${fileUrl}`
+    });
     if (msgError) return res.status(500).json({ error: msgError.message });
     res.json({ success: true, fileUrl });
 });
@@ -373,15 +305,12 @@ app.post('/api/messages/upload', requireAuth, upload.single('file'), async (req,
 // ========== PROFIL ==========
 app.get('/profile/:id', requireAuth, async (req, res) => {
     const targetId = parseInt(req.params.id);
-    
     const { data: targetUser, error } = await supabase
         .from('users')
         .select('id, username, bio, avatar, rank, created_at')
         .eq('id', targetId)
         .single();
-    
     if (error || !targetUser) return res.status(404).send('Utilisateur non trouvé');
-    
     let posts = [];
     if (targetUser.rank !== 'banned') {
         const { data } = await supabase
@@ -391,19 +320,13 @@ app.get('/profile/:id', requireAuth, async (req, res) => {
             .order('created_at', { ascending: false });
         posts = data || [];
     }
-    
     res.render('profile', { user: req.session.user, targetUser, posts });
 });
 
 app.post('/api/profile/bio', requireAuth, async (req, res) => {
     const { bio } = req.body;
     if (bio.length > 300) return res.status(400).json({ error: 'Bio trop longue' });
-    
-    const { error } = await supabase
-        .from('users')
-        .update({ bio })
-        .eq('id', req.session.userId);
-    
+    const { error } = await supabase.from('users').update({ bio }).eq('id', req.session.userId);
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true });
 });
@@ -418,9 +341,7 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
         .from('users')
         .select('id, username, is_admin, rank, bio, created_at')
         .order('id', { ascending: true });
-    
     if (error) return res.status(500).json({ error: error.message });
-    
     const formattedUsers = users.map(u => ({
         ...u,
         rank: u.is_admin ? 'admin' : (u.rank || 'user')
@@ -432,28 +353,14 @@ app.post('/api/admin/users/rank', requireAdmin, async (req, res) => {
     const { userId, rank } = req.body;
     const validRanks = ['user', 'vip', 'premium', 'tester', 'banned', 'admin'];
     if (!validRanks.includes(rank)) return res.status(400).json({ error: 'Rang invalide' });
-    
     if (rank === 'banned') {
-        const { data: bannedUsers } = await supabase
-            .from('users')
-            .select('id')
-            .eq('rank', 'banned');
-        
+        const { data: bannedUsers } = await supabase.from('users').select('id').eq('rank', 'banned');
         const newBannedNumber = (bannedUsers?.length || 0) + 1;
         const newUsername = `banned_user-${newBannedNumber}`;
-        
-        await supabase
-            .from('users')
-            .update({ username: newUsername })
-            .eq('id', userId);
+        await supabase.from('users').update({ username: newUsername }).eq('id', userId);
     }
-    
     const isAdmin = (rank === 'admin') ? 1 : 0;
-    const { error } = await supabase
-        .from('users')
-        .update({ is_admin: isAdmin, rank })
-        .eq('id', userId);
-    
+    const { error } = await supabase.from('users').update({ is_admin: isAdmin, rank }).eq('id', userId);
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true });
 });
@@ -461,12 +368,7 @@ app.post('/api/admin/users/rank', requireAdmin, async (req, res) => {
 app.post('/api/admin/users/delete', requireAdmin, async (req, res) => {
     const { userId } = req.body;
     if (userId == req.session.userId) return res.status(400).json({ error: "Impossible de se supprimer" });
-    
-    const { error } = await supabase
-        .from('users')
-        .delete()
-        .eq('id', userId);
-    
+    const { error } = await supabase.from('users').delete().eq('id', userId);
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true });
 });
@@ -476,18 +378,11 @@ app.get('/admin', requireAdmin, (req, res) => {
 });
 
 // ========== TICKETS ==========
-app.get('/contact', requireAuth, (req, res) => {
-    res.render('contact', { user: req.session.user });
-});
-
+app.get('/contact', requireAuth, (req, res) => { res.render('contact', { user: req.session.user }); });
 app.post('/api/contact', requireAuth, async (req, res) => {
     const { subject, message } = req.body;
     if (!subject || !message) return res.status(400).json({ error: 'Sujet et message requis' });
-    
-    const { error } = await supabase
-        .from('contact_messages')
-        .insert({ user_id: req.session.userId, subject, message });
-    
+    const { error } = await supabase.from('contact_messages').insert({ user_id: req.session.userId, subject, message });
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true });
 });
@@ -498,7 +393,6 @@ app.get('/my-tickets', requireAuth, async (req, res) => {
         .select('*')
         .eq('user_id', req.session.userId)
         .order('created_at', { ascending: false });
-    
     res.render('my-tickets', { user: req.session.user, tickets: tickets || [] });
 });
 
@@ -507,30 +401,23 @@ app.get('/admin/messages', requireAdmin, async (req, res) => {
         .from('contact_messages')
         .select(`*, users(id, username)`)
         .order('created_at', { ascending: false });
-    
     res.render('admin-messages', { user: req.session.user, messages: messages || [] });
 });
 
 app.post('/api/admin/messages/reply', requireAdmin, async (req, res) => {
     const { messageId, reply } = req.body;
     if (!reply) return res.status(400).json({ error: 'Réponse requise' });
-    
     const { error } = await supabase
         .from('contact_messages')
         .update({ admin_reply: reply, status: 'replied', replied_at: new Date() })
         .eq('id', messageId);
-    
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true });
 });
 
 app.post('/api/admin/messages/resolve', requireAdmin, async (req, res) => {
     const { messageId } = req.body;
-    const { error } = await supabase
-        .from('contact_messages')
-        .update({ status: 'resolved' })
-        .eq('id', messageId);
-    
+    const { error } = await supabase.from('contact_messages').update({ status: 'resolved' }).eq('id', messageId);
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true });
 });
@@ -540,164 +427,108 @@ app.get('/api/admin/messages/unread-count', requireAdmin, async (req, res) => {
         .from('contact_messages')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'pending');
-    
     if (error) return res.status(500).json({ error: error.message });
     res.json({ count: count || 0 });
 });
-// ========== GESTION DES PINS DE CONVERSATION ==========
 
-// Récupérer l'ID de conversation (pair ordonné)
-function getConversationId(userA, userB) {
-    return userA < userB ? `${userA}-${userB}` : `${userB}-${userA}`;
-}
+// ========== ROUTES PIN (conversation) ==========
+function getConvId(a, b) { return a < b ? `${a}-${b}` : `${b}-${a}`; }
 
-// Vérifier si une conversation a un PIN
 app.get('/api/conversation/has-pin/:userId', requireAuth, async (req, res) => {
     const otherId = parseInt(req.params.userId);
-    const user1 = Math.min(req.session.userId, otherId);
-    const user2 = Math.max(req.session.userId, otherId);
-    
+    const u1 = Math.min(req.session.userId, otherId);
+    const u2 = Math.max(req.session.userId, otherId);
     const { data, error } = await supabase
         .from('conversation_pins')
         .select('pin_hash')
-        .eq('user1_id', user1)
-        .eq('user2_id', user2)
+        .eq('user1_id', u1)
+        .eq('user2_id', u2)
         .single();
-    
     if (error && error.code !== 'PGRST116') return res.status(500).json({ error: error.message });
     res.json({ hasPin: !!data });
 });
 
-// Définir ou modifier un PIN
 app.post('/api/conversation/set-pin', requireAuth, async (req, res) => {
     const { otherId, pin } = req.body;
-    if (!pin || pin.length < 4) return res.status(400).json({ error: 'PIN must be at least 4 digits' });
-    if (!/^\d+$/.test(pin)) return res.status(400).json({ error: 'PIN must contain only digits' });
-    
-    const user1 = Math.min(req.session.userId, otherId);
-    const user2 = Math.max(req.session.userId, otherId);
+    if (!pin || pin.length < 4 || !/^\d+$/.test(pin)) return res.status(400).json({ error: 'PIN invalide' });
+    const u1 = Math.min(req.session.userId, otherId);
+    const u2 = Math.max(req.session.userId, otherId);
     const pinHash = await bcrypt.hash(pin, 10);
-    
     const { data: existing } = await supabase
         .from('conversation_pins')
         .select('id')
-        .eq('user1_id', user1)
-        .eq('user2_id', user2)
+        .eq('user1_id', u1)
+        .eq('user2_id', u2)
         .single();
-    
-    let result;
-    if (existing) {
-        // Si un PIN existe déjà, il faut que l'autre utilisateur ait approuvé une réinitialisation
-        // ou que les deux soient d'accord. Ici on simplifie : on permet de le changer si les deux sont d'accord.
-        // Pour cette démo, on autorise le changement si le PIN actuel est fourni (vérification)
-        // Mais on va utiliser le système de reset.
-        return res.status(403).json({ error: 'PIN already set. Use reset flow.' });
-    } else {
-        result = await supabase
-            .from('conversation_pins')
-            .insert({ user1_id: user1, user2_id: user2, pin_hash: pinHash });
-    }
-    
-    if (result.error) return res.status(500).json({ error: result.error.message });
+    if (existing) return res.status(403).json({ error: 'PIN déjà défini. Utilisez la réinitialisation.' });
+    const { error } = await supabase
+        .from('conversation_pins')
+        .insert({ user1_id: u1, user2_id: u2, pin_hash: pinHash });
+    if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true });
 });
 
-// Vérifier le PIN d'une conversation
 app.post('/api/conversation/verify-pin', requireAuth, async (req, res) => {
     const { otherId, pin } = req.body;
-    if (!pin) return res.status(400).json({ error: 'PIN required' });
-    
-    const user1 = Math.min(req.session.userId, otherId);
-    const user2 = Math.max(req.session.userId, otherId);
-    
+    if (!pin) return res.status(400).json({ error: 'PIN requis' });
+    const u1 = Math.min(req.session.userId, otherId);
+    const u2 = Math.max(req.session.userId, otherId);
     const { data, error } = await supabase
         .from('conversation_pins')
-        .select('pin_hash, id')
-        .eq('user1_id', user1)
-        .eq('user2_id', user2)
+        .select('pin_hash')
+        .eq('user1_id', u1)
+        .eq('user2_id', u2)
         .single();
-    
-    if (error || !data) return res.status(404).json({ error: 'No PIN set for this conversation' });
-    
+    if (error || !data) return res.status(404).json({ error: 'Aucun PIN défini' });
     const valid = await bcrypt.compare(pin, data.pin_hash);
-    if (!valid) return res.status(401).json({ error: 'Invalid PIN' });
-    
-    // Stocker en session que la conversation est déverrouillée
-    const convKey = getConversationId(req.session.userId, otherId);
+    if (!valid) return res.status(401).json({ error: 'PIN incorrect' });
+    const key = getConvId(req.session.userId, otherId);
     if (!req.session.unlockedConversations) req.session.unlockedConversations = [];
-    if (!req.session.unlockedConversations.includes(convKey)) {
-        req.session.unlockedConversations.push(convKey);
+    if (!req.session.unlockedConversations.includes(key)) {
+        req.session.unlockedConversations.push(key);
     }
-    
     res.json({ success: true });
 });
 
-// Demander une réinitialisation de PIN
 app.post('/api/conversation/request-reset', requireAuth, async (req, res) => {
     const { otherId } = req.body;
-    const user1 = Math.min(req.session.userId, otherId);
-    const user2 = Math.max(req.session.userId, otherId);
-    
+    const u1 = Math.min(req.session.userId, otherId);
+    const u2 = Math.max(req.session.userId, otherId);
     const { data, error } = await supabase
         .from('conversation_pins')
-        .select('id, reset_requested_by, reset_approved_by')
-        .eq('user1_id', user1)
-        .eq('user2_id', user2)
+        .select('id')
+        .eq('user1_id', u1)
+        .eq('user2_id', u2)
         .single();
-    
-    if (error || !data) return res.status(404).json({ error: 'No PIN set' });
-    
-    // Si déjà une demande en cours, on la renouvelle
+    if (error || !data) return res.status(404).json({ error: 'Aucun PIN défini' });
     await supabase
         .from('conversation_pins')
-        .update({
-            reset_requested_by: req.session.userId,
-            reset_requested_at: new Date(),
-            reset_approved_by: null
-        })
+        .update({ reset_requested_by: req.session.userId, reset_requested_at: new Date(), reset_approved_by: null })
         .eq('id', data.id);
-    
-    res.json({ success: true, message: 'Reset request sent. Wait for other user to approve.' });
+    res.json({ success: true });
 });
 
-// Approuver une réinitialisation de PIN
 app.post('/api/conversation/approve-reset', requireAuth, async (req, res) => {
     const { otherId } = req.body;
-    const user1 = Math.min(req.session.userId, otherId);
-    const user2 = Math.max(req.session.userId, otherId);
-    
+    const u1 = Math.min(req.session.userId, otherId);
+    const u2 = Math.max(req.session.userId, otherId);
     const { data, error } = await supabase
         .from('conversation_pins')
         .select('id, reset_requested_by')
-        .eq('user1_id', user1)
-        .eq('user2_id', user2)
+        .eq('user1_id', u1)
+        .eq('user2_id', u2)
         .single();
-    
-    if (error || !data) return res.status(404).json({ error: 'No PIN set' });
-    if (!data.reset_requested_by) return res.status(400).json({ error: 'No reset request pending' });
-    if (data.reset_requested_by === req.session.userId) {
-        return res.status(400).json({ error: 'You cannot approve your own request' });
+    if (error || !data) return res.status(404).json({ error: 'Aucun PIN défini' });
+    if (!data.reset_requested_by) return res.status(400).json({ error: 'Aucune demande en cours' });
+    if (data.reset_requested_by === req.session.userId) return res.status(400).json({ error: 'Vous ne pouvez pas approuver votre propre demande' });
+    await supabase.from('conversation_pins').delete().eq('id', data.id);
+    const key = getConvId(req.session.userId, otherId);
+    if (req.session.unlockedConversations) {
+        req.session.unlockedConversations = req.session.unlockedConversations.filter(k => k !== key);
     }
-    
-    // Approuver
-    await supabase
-        .from('conversation_pins')
-        .update({ reset_approved_by: req.session.userId })
-        .eq('id', data.id);
-    
-    // Maintenant les deux sont d'accord, on supprime le PIN (l'utilisateur pourra en recréer un)
-    // Ou on pourrait le garder pour le moment. Ici on le supprime pour que l'utilisateur puisse en définir un nouveau.
-    await supabase
-        .from('conversation_pins')
-        .delete()
-        .eq('id', data.id);
-    
-    // Supprimer le déverrouillage de session
-    const convKey = getConversationId(req.session.userId, otherId);
-    req.session.unlockedConversations = (req.session.unlockedConversations || []).filter(k => k !== convKey);
-    
-    res.json({ success: true, message: 'Reset approved. PIN removed. You can now set a new PIN.' });
+    res.json({ success: true });
 });
+
 // ========== DÉMARRAGE ==========
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ KaliNet sur http://0.0.0.0:${PORT}`);
