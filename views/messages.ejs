@@ -69,6 +69,41 @@
     </div>
 </div>
 <script>
+// Vérifier si la conversation a un PIN
+async function checkPin(userId) {
+    const res = await fetch(`/api/conversation/has-pin/${userId}`);
+    return res.json();
+}
+
+// Déverrouiller avec PIN
+async function unlockConversation(userId, pin) {
+    const res = await fetch('/api/conversation/verify-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ otherId: userId, pin })
+    });
+    return res.json();
+}
+
+// Demander réinitialisation
+async function requestReset(userId) {
+    const res = await fetch('/api/conversation/request-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ otherId: userId })
+    });
+    return res.json();
+}
+
+// Approuver réinitialisation
+async function approveReset(userId) {
+    const res = await fetch('/api/conversation/approve-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ otherId: userId })
+    });
+    return res.json();
+}
     let currentUserId = null;
     
     async function loadChat(userId) {
