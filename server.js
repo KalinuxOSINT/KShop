@@ -166,7 +166,7 @@ app.post('/api/post/delete', requireAuth, async (req, res) => {
     if (error || !post) return res.status(404).json({ error: 'Post non trouvé' });
     
     const isAuthor = (post.user_id === req.session.userId);
-    const isAdmin = req.session.user?.is_admin === 1;
+    const isAdmin = req.session.user && req.session.user.is_admin === 1;  // ← Vérification stricte
     
     if (!isAuthor && !isAdmin) {
         return res.status(403).json({ error: 'Non autorisé' });
