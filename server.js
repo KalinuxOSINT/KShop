@@ -544,7 +544,160 @@ app.get('/api/admin/messages/unread-count', requireAdmin, async (req, res) => {
     if (error) return res.status(500).json({ error: error.message });
     res.json({ count: count || 0 });
 });
+// ========== GESTION DES PINS DE CONVERSATION ==========
 
+// Récupérer l'ID de conversation (pair ordonné)
+function getConversationId(userA, userB) {
+    return userA < userB ? `${userA}-${userB}` : `${userB}-${userA}`;
+}
+
+// Vérifier si une conversation a un PIN
+app.get('/api/conversation/has-pin/:userId', requireAuth, async (req, res) => {
+    const otherId = parseInt(req.params.userId);
+    const user1 = Math.min(req.session.userId, otherId);
+    const user2 = Math.max(req.session.userId, otherId);
+    
+    const { data, error } = await supabase
+        .from('conversation_pins')
+        .select('pin_hash')
+        .eq('user1_id', user1)
+        .eq('user2_id', user2)
+        .single();
+    
+    if (error && error.code !== 'PGRST116') return res.status(500).json({ error: error.message });
+    res.json({ hasPin: !!data });
+});
+
+// Définir ou modifier un PIN
+app.post('/api/conversation/set-pin', requireAuth, async (req, res) => {
+    const { otherId, pin } = req.body;
+    if (!pin || pin.length < 4) return res.status(400).json({ error: 'PIN must be at least 4 digits' });
+    if (!/^\d+$/.test(pin)) return res.status(400).json({ error: 'PIN must contain only digits' });
+    
+    const user1 = Math.min(req.session.userId, otherId);
+    const user2 = Math.max(req.session.userId, otherId);
+    const pinHash = await bcrypt.hash(pin, 10);
+    
+    const { data: existing } = await supabase
+        .from('conversation_pins')
+        .select('id')
+        .eq('user1_id', user1)
+        .eq('user2_id', user2)
+        .single();
+    
+    let result;
+    if (existing) {
+        // Si un PIN existe déjà, il faut que l'autre utilisateur ait approuvé une réinitialisation
+        // ou que les deux soient d'accord. Ici on simplifie : on permet de le changer si les deux sont d'accord.
+        // Pour cette démo, on autorise le changement si le PIN actuel est fourni (vérification)
+        // Mais on va utiliser le système de reset.
+        return res.status(403).json({ error: 'PIN already set. Use reset flow.' });
+    } else {
+        result = await supabase
+            .from('conversation_pins')
+            .insert({ user1_id: user1, user2_id: user2, pin_hash: pinHash });
+    }
+    
+    if (result.error) return res.status(500).json({ error: result.error.message });
+    res.json({ success: true });
+});
+
+// Vérifier le PIN d'une conversation
+app.post('/api/conversation/verify-pin', requireAuth, async (req, res) => {
+    const { otherId, pin } = req.body;
+    if (!pin) return res.status(400).json({ error: 'PIN required' });
+    
+    const user1 = Math.min(req.session.userId, otherId);
+    const user2 = Math.max(req.session.userId, otherId);
+    
+    const { data, error } = await supabase
+        .from('conversation_pins')
+        .select('pin_hash, id')
+        .eq('user1_id', user1)
+        .eq('user2_id', user2)
+        .single();
+    
+    if (error || !data) return res.status(404).json({ error: 'No PIN set for this conversation' });
+    
+    const valid = await bcrypt.compare(pin, data.pin_hash);
+    if (!valid) return res.status(401).json({ error: 'Invalid PIN' });
+    
+    // Stocker en session que la conversation est déverrouillée
+    const convKey = getConversationId(req.session.userId, otherId);
+    if (!req.session.unlockedConversations) req.session.unlockedConversations = [];
+    if (!req.session.unlockedConversations.includes(convKey)) {
+        req.session.unlockedConversations.push(convKey);
+    }
+    
+    res.json({ success: true });
+});
+
+// Demander une réinitialisation de PIN
+app.post('/api/conversation/request-reset', requireAuth, async (req, res) => {
+    const { otherId } = req.body;
+    const user1 = Math.min(req.session.userId, otherId);
+    const user2 = Math.max(req.session.userId, otherId);
+    
+    const { data, error } = await supabase
+        .from('conversation_pins')
+        .select('id, reset_requested_by, reset_approved_by')
+        .eq('user1_id', user1)
+        .eq('user2_id', user2)
+        .single();
+    
+    if (error || !data) return res.status(404).json({ error: 'No PIN set' });
+    
+    // Si déjà une demande en cours, on la renouvelle
+    await supabase
+        .from('conversation_pins')
+        .update({
+            reset_requested_by: req.session.userId,
+            reset_requested_at: new Date(),
+            reset_approved_by: null
+        })
+        .eq('id', data.id);
+    
+    res.json({ success: true, message: 'Reset request sent. Wait for other user to approve.' });
+});
+
+// Approuver une réinitialisation de PIN
+app.post('/api/conversation/approve-reset', requireAuth, async (req, res) => {
+    const { otherId } = req.body;
+    const user1 = Math.min(req.session.userId, otherId);
+    const user2 = Math.max(req.session.userId, otherId);
+    
+    const { data, error } = await supabase
+        .from('conversation_pins')
+        .select('id, reset_requested_by')
+        .eq('user1_id', user1)
+        .eq('user2_id', user2)
+        .single();
+    
+    if (error || !data) return res.status(404).json({ error: 'No PIN set' });
+    if (!data.reset_requested_by) return res.status(400).json({ error: 'No reset request pending' });
+    if (data.reset_requested_by === req.session.userId) {
+        return res.status(400).json({ error: 'You cannot approve your own request' });
+    }
+    
+    // Approuver
+    await supabase
+        .from('conversation_pins')
+        .update({ reset_approved_by: req.session.userId })
+        .eq('id', data.id);
+    
+    // Maintenant les deux sont d'accord, on supprime le PIN (l'utilisateur pourra en recréer un)
+    // Ou on pourrait le garder pour le moment. Ici on le supprime pour que l'utilisateur puisse en définir un nouveau.
+    await supabase
+        .from('conversation_pins')
+        .delete()
+        .eq('id', data.id);
+    
+    // Supprimer le déverrouillage de session
+    const convKey = getConversationId(req.session.userId, otherId);
+    req.session.unlockedConversations = (req.session.unlockedConversations || []).filter(k => k !== convKey);
+    
+    res.json({ success: true, message: 'Reset approved. PIN removed. You can now set a new PIN.' });
+});
 // ========== DÉMARRAGE ==========
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ KaliNet sur http://0.0.0.0:${PORT}`);
