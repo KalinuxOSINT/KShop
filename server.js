@@ -31,7 +31,11 @@ app.use(session({
     store: new pgSession({
         conString: process.env.DATABASE_URL,
         tableName: 'session',
-        createTableIfMissing: true
+        createTableIfMissing: true,
+        pool: new (require('pg').Pool)({
+            connectionString: process.env.DATABASE_URL,
+            ssl: { rejectUnauthorized: false }
+        })
     }),
     secret: process.env.SESSION_SECRET,
     resave: false,
