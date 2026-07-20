@@ -23,6 +23,9 @@ const supabase = createClient(
     process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+// Désactive la vérification SSL pour Supabase pooler (certificat auto-signé)
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
 // ========== SESSION STORE ==========
 const pg = require('pg');
 const pgPool = new pg.Pool({
