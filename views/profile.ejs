@@ -1,91 +1,104 @@
 <!DOCTYPE html>
-<html>
+<html lang="fr">
 <head>
-    <link rel="icon" type="image/x-icon" href="/Favicon.ico">
-    <title>KaliNet - <%= targetUser.username %></title>
-    <style>
-        body{background:#0a0c12;color:#eee;font-family:Arial;padding:2rem;}
-        .container{max-width:800px;margin:0 auto;}
-        .profile-card{background:#1a1f2e;border-radius:1rem;padding:2rem;text-align:center;margin-bottom:2rem;}
-        .post-card{background:#1a1f2e;border-radius:1rem;padding:1rem;margin-bottom:1rem;}
-        .nav a{color:#00ffcc;text-decoration:none;margin-right:1rem;}
-        button{background:#00ffcc;color:black;padding:0.5rem 1rem;border:none;border-radius:2rem;cursor:pointer;}
-        textarea{width:100%;padding:0.5rem;background:#1e2332;border:1px solid #00ffcc;color:white;border-radius:0.5rem;}
-        .rank-badge{font-size:0.8rem;padding:0.2rem 0.5rem;border-radius:1rem;background:#2a2e3f;}
-        .banned-user{text-decoration:line-through;color:#ff4444;}
-        #unreadBadge{background:#ff4444;color:white;border-radius:50%;padding:0.1rem 0.4rem;font-size:0.7rem;margin-left:0.3rem;}
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/x-icon" href="/Favicon.ico">
+  <link rel="stylesheet" href="/style.css">
+  <title>KaliNet — <%= targetUser.username %></title>
 </head>
 <body>
-<div class="container">
-    <div class="nav">
-        <a href="/">🏠 Fil</a>
-        <a href="/messages">💬 Messages</a>
-        <a href="/profile/<%= user.id %>">👤 Mon profil</a>
-        <a href="/contact">📨 Contact</a>
-        <a href="/my-tickets">📋 Mes tickets</a>
-        <% if (user.is_admin) { %>
-            <a href="/admin/users" style="color:#ff4444;">👑 Admin</a>
-            <a href="/admin/messages" id="adminMessagesLink" style="position:relative;">
-                📩 Messages <span id="unreadBadge">0</span>
-            </a>
-        <% } %>
-        <a href="/logout">🚪 Déconnexion</a>
-    </div>
 
-    <div class="profile-card">
-        <h1><%= targetUser.username %></h1>
-        <p>🏷️ Rang : 
-            <span class="rank-badge">
-                <% if (targetUser.rank === 'admin') { %>👑 Admin
-                <% } else if (targetUser.rank === 'vip') { %>⭐ VIP
-                <% } else if (targetUser.rank === 'premium') { %>💎 Premium
-                <% } else if (targetUser.rank === 'tester') { %>🧪 Testeur
-                <% } else if (targetUser.rank === 'banned') { %>🔒 Banni
-                <% } else { %>👤 Utilisateur<% } %>
-            </span>
-        </p>
-        <p>📅 Membre depuis : <%= new Date(targetUser.created_at).toLocaleDateString() %></p>
-        <p>📝 Bio : <%= targetUser.bio || 'Aucune bio' %></p>
-        <% if (targetUser.id == user.id) { %>
-            <button onclick="editBio()">✏️ Modifier ma bio</button>
-        <% } else { %>
-            <button onclick="startChat()">💬 Envoyer un message</button>
-        <% } %>
-    </div>
+<nav class="navbar">
+  <a href="/" class="navbar-brand">
+    <img src="/Kalinux.png" alt="Logo" onerror="this.style.display='none'">
+    KaliNet
+  </a>
+  <div class="navbar-links">
+    <a href="/">Fil</a>
+    <a href="/messages">Messages</a>
+    <a href="/profile/<%= user.id %>" class="active">Profil</a>
+    <a href="/contact">Contact</a>
+    <a href="/my-tickets">Tickets</a>
+    <% if (user.is_admin) { %>
+      <a href="/admin/users" class="danger">Admin</a>
+      <a href="/admin/messages">
+        Messages
+        <span id="unreadBadge" style="display:none;background:var(--red);color:white;border-radius:2rem;padding:0.1rem 0.4rem;font-size:0.62rem;">0</span>
+      </a>
+    <% } %>
+  </div>
+  <div class="navbar-user">
+    <a href="/logout" class="btn btn-ghost btn-sm">Déco</a>
+  </div>
+</nav>
 
-    <h2>📰 Posts de <%= targetUser.username %></h2>
+<div class="page-wrapper">
+
+  <div class="profile-header">
+    <div class="profile-avatar">
+      <%= targetUser.username.charAt(0).toUpperCase() %>
+    </div>
+    <div class="profile-name"><%= targetUser.username %></div>
+    <div class="mt-sm">
+      <span class="badge badge-<%= targetUser.rank %>">
+        <% if (targetUser.rank==='admin') { %>👑 Admin
+        <% } else if (targetUser.rank==='vip') { %>⭐ VIP
+        <% } else if (targetUser.rank==='premium') { %>💎 Premium
+        <% } else if (targetUser.rank==='tester') { %>🧪 Testeur
+        <% } else if (targetUser.rank==='banned') { %>🔒 Banni
+        <% } else { %>👤 Membre<% } %>
+      </span>
+    </div>
+    <div class="profile-bio"><%= targetUser.bio || 'Aucune bio renseignée.' %></div>
+    <div class="profile-meta">Membre depuis le <%= new Date(targetUser.created_at).toLocaleDateString('fr-FR') %></div>
+    <div class="mt-md flex" style="justify-content:center;gap:0.5rem;">
+      <% if (targetUser.id == user.id) { %>
+        <button class="btn btn-ghost btn-sm" onclick="editBio()">✏️ Modifier ma bio</button>
+      <% } else { %>
+        <a href="/messages" class="btn btn-primary btn-sm">💬 Message</a>
+      <% } %>
+    </div>
+  </div>
+
+  <div class="section-title">Posts de <%= targetUser.username %></div>
+
+  <% if (posts.length === 0) { %>
+    <div class="empty-state">
+      <span class="empty-icon">📭</span>
+      Aucun post pour l'instant.
+    </div>
+  <% } else { %>
     <% posts.forEach(post => { %>
-        <div class="post-card">
-            <div style="font-size:0.8rem;"><%= new Date(post.created_at).toLocaleString() %></div>
-            <p><%= post.content %></p>
-        </div>
+      <div class="post-card">
+        <div class="post-time mb-sm text-xs"><%= new Date(post.created_at).toLocaleString('fr-FR') %></div>
+        <div class="post-content"><%= post.content %></div>
+      </div>
     <% }) %>
+  <% } %>
+
 </div>
+
 <script>
-    function editBio() {
-        const newBio = prompt('Nouvelle bio (max 300 caractères) :', '<%= targetUser.bio %>');
-        if (newBio !== null) {
-            fetch('/api/profile/bio', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ bio: newBio }) })
-            .then(() => location.reload());
-        }
+  function editBio() {
+    const newBio = prompt('Nouvelle bio (max 300 caractères) :', '<%= (targetUser.bio || "").replace(/'/g, "\\'") %>');
+    if (newBio !== null) {
+      fetch('/api/profile/bio', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ bio: newBio }) })
+        .then(() => location.reload());
     }
-    function startChat() { window.location.href = '/messages'; }
-    
-    async function checkUnreadMessages() {
-        <% if (user.is_admin) { %>
-            const res = await fetch('/api/admin/messages/unread-count');
-            const data = await res.json();
-            const badge = document.getElementById('unreadBadge');
-            if (badge) {
-                const count = data.count || 0;
-                badge.innerText = count;
-                badge.style.display = count > 0 ? 'inline' : 'none';
-            }
-        <% } %>
-    }
-    setInterval(checkUnreadMessages, 30000);
-    checkUnreadMessages();
+  }
+
+  async function checkUnread() {
+    <% if (user.is_admin) { %>
+    try {
+      const data = await (await fetch('/api/admin/messages/unread-count')).json();
+      const badge = document.getElementById('unreadBadge');
+      if (badge) { badge.innerText = data.count||0; badge.style.display = data.count > 0 ? 'inline' : 'none'; }
+    } catch(e) {}
+    <% } %>
+  }
+  setInterval(checkUnread, 30000);
+  checkUnread();
 </script>
 </body>
 </html>

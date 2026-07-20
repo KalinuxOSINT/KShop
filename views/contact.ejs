@@ -1,46 +1,61 @@
 <!DOCTYPE html>
-<html>
+<html lang="fr">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/x-icon" href="/Favicon.ico">
+    <link rel="stylesheet" href="/style.css">
     <title>KaliNet - Contact</title>
-    <style>
-        body{background:#0a0c12;color:#eee;font-family:Arial;padding:2rem;}
-        .container{max-width:600px;margin:0 auto;background:#1a1f2e;padding:2rem;border-radius:1rem;}
-        input,textarea{width:100%;padding:0.5rem;margin-bottom:1rem;background:#1e2332;border:1px solid #00ffcc;color:white;border-radius:0.5rem;}
-        button{background:#00ffcc;color:black;padding:0.5rem 1rem;border:none;border-radius:2rem;cursor:pointer;}
-        .nav a{color:#00ffcc;text-decoration:none;margin-right:1rem;}
-        .result{margin-top:1rem;}
-    </style>
 </head>
 <body>
-<div class="container">
-    <div class="nav">
-        <a href="/">🏠 Accueil</a>
-        <a href="/my-tickets">📋 Mes tickets</a>
+
+<nav class="navbar">
+    <a href="/" class="navbar-brand">
+        <img src="/Kalinux.png" alt="Logo" onerror="this.style.display='none'">
+        KaliNet
+    </a>
+    <div class="navbar-links">
+        <a href="/">🏠 Fil</a>
+        <a href="/messages">💬 Messages</a>
+        <a href="/contact" class="active">📨 Contact</a>
+        <a href="/my-tickets">📋 Tickets</a>
     </div>
-    <h1>📨 Contacter le support</h1>
-    <form id="contactForm">
-        <input type="text" id="subject" placeholder="Sujet" required>
-        <textarea id="message" rows="5" placeholder="Votre message..." required></textarea>
-        <button type="submit">Envoyer</button>
-    </form>
-    <div id="result" class="result"></div>
+    <div class="navbar-user">
+        <a href="/logout" class="btn btn-ghost btn-sm">Déconnexion</a>
+    </div>
+</nav>
+
+<div class="page-wrapper">
+    <div class="section-title">📨 Contacter le support</div>
+
+    <div class="card">
+        <form id="contactForm">
+            <div class="form-group">
+                <label>Sujet</label>
+                <input type="text" id="subject" placeholder="Sujet de ta demande" required>
+            </div>
+            <div class="form-group">
+                <label>Message</label>
+                <textarea id="message" rows="6" placeholder="Décris ton problème ou ta question..." required></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary">📤 Envoyer</button>
+        </form>
+        <div id="result" class="mt-md"></div>
+    </div>
 </div>
+
 <script>
     document.getElementById('contactForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const subject = document.getElementById('subject').value;
         const message = document.getElementById('message').value;
-        const res = await fetch('/api/contact', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ subject, message })
-        });
+        const res = await fetch('/api/contact', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ subject, message }) });
+        const result = document.getElementById('result');
         if (res.ok) {
-            document.getElementById('result').innerHTML = '<p style="color:#00ffcc;">✅ Message envoyé !</p>';
+            result.innerHTML = '<span class="text-accent">✅ Message envoyé avec succès !</span>';
             document.getElementById('contactForm').reset();
         } else {
-            document.getElementById('result').innerHTML = '<p style="color:#ff4444;">❌ Erreur</p>';
+            result.innerHTML = '<span class="text-danger">❌ Erreur lors de l\'envoi</span>';
         }
     });
 </script>

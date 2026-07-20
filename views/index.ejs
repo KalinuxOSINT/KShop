@@ -1,131 +1,128 @@
 <!DOCTYPE html>
-<html>
+<html lang="fr">
 <head>
-    <link rel="icon" type="image/x-icon" href="/Favicon.ico">
-    <title>KaliNet - Fil d'actualité</title>
-    <style>
-        body{background:#0a0c12;color:#eee;font-family:Arial;padding:2rem;}
-        .container{max-width:800px;margin:0 auto;}
-        .post-card{background:#1a1f2e;border-radius:1rem;padding:1rem;margin-bottom:1rem;position:relative;}
-        .nav{display:flex;gap:1rem;margin-bottom:2rem;flex-wrap:wrap;}
-        .nav a{color:#00ffcc;text-decoration:none;}
-        textarea{width:100%;padding:0.5rem;background:#1e2332;border:1px solid #00ffcc;color:white;border-radius:0.5rem;}
-        button{background:#00ffcc;color:black;padding:0.5rem 1rem;border:none;border-radius:2rem;cursor:pointer;}
-        .rank-badge{font-size:0.7rem;padding:0.1rem 0.4rem;border-radius:1rem;background:#2a2e3f;}
-        .delete-btn{background:#ff4444;color:white;padding:0.2rem 0.5rem;font-size:0.7rem;border:none;border-radius:1rem;cursor:pointer;margin-left:0.5rem;}
-        .delete-btn:hover{background:#cc0000;}
-        .report-btn{background:#ffaa00;color:black;padding:0.2rem 0.5rem;font-size:0.7rem;border:none;border-radius:1rem;cursor:pointer;margin-left:0.5rem;}
-        .report-btn:hover{background:#ff8800;}
-        #unreadBadge{background:#ff4444;color:white;border-radius:50%;padding:0.1rem 0.4rem;font-size:0.7rem;margin-left:0.3rem;}
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/x-icon" href="/Favicon.ico">
+  <link rel="stylesheet" href="/style.css">
+  <title>KaliNet — Fil d'actualité</title>
 </head>
 <body>
-<div class="container">
-    <div class="nav">
-        <span>👋 <%= user.username %> (<%= user.rank %>)</span>
-        <a href="https://brixhub.cc" target="_blank">🔍 BrixHub OSINT</a>
-        <a href="/messages">💬 Messages</a>
-        <a href="/profile/<%= user.id %>">👤 Mon profil</a>
-        <a href="/contact">📨 Contact</a>
-        <a href="/my-tickets">📋 Mes tickets</a>
-        <% if (user.is_admin) { %>
-            <a href="/admin/users" style="color:#ff4444;">👑 Admin</a>
-            <a href="/admin/reports" style="color:#ffaa00;">🚩 Signalements</a>
-            <a href="/admin/messages" id="adminMessagesLink" style="position:relative;">
-                📩 Messages <span id="unreadBadge">0</span>
-            </a>
-        <% } %>
-        <a href="/logout">🚪 Déconnexion</a>
-    </div>
 
-    <h2>📝 Nouveau post</h2>
-    <textarea id="postContent" rows="3" placeholder="Publie un message, un tutoriel, un hack éthique..."></textarea>
-    <button onclick="sendPost()">📤 Publier</button>
-
-    <h2>📰 Fil d'actualité</h2>
-    <% if (posts.length === 0) { %>
-        <p style="color:#ffaa00;">⚠️ Aucun post à afficher. Sois le premier à publier !</p>
-    <% } else { %>
-        <% posts.forEach(post => { %>
-            <div class="post-card" id="post-<%= post.id %>">
-                <div>
-                    <a href="/profile/<%= post.user_id %>" class="profile-link" style="color:#00ffcc; text-decoration:none;">
-                        <strong><%= post.users.username %></strong>
-                    </a>
-                    <span class="rank-badge">
-                        <% if (post.users.rank === 'admin') { %>👑
-                        <% } else if (post.users.rank === 'vip') { %>⭐
-                        <% } else if (post.users.rank === 'premium') { %>💎
-                        <% } else if (post.users.rank === 'tester') { %>🧪
-                        <% } else if (post.users.rank === 'banned') { %>🔒
-                        <% } else { %>👤<% } %>
-                    </span>
-                    <% if (user.is_admin || user.id === post.user_id) { %>
-                        <button class="delete-btn" onclick="deletePost(<%= post.id %>)">🗑️ Supprimer</button>
-                    <% } %>
-                    <% if (!user.is_admin && user.id !== post.user_id) { %>
-                        <button class="report-btn" onclick="reportPost(<%= post.id %>)">🚩 Signaler</button>
-                    <% } %>
-                </div>
-                <div style="font-size:0.8rem;"><%= new Date(post.created_at).toLocaleString() %></div>
-                <p><%= post.content %></p>
-            </div>
-        <% }) %>
+<nav class="navbar">
+  <a href="/" class="navbar-brand">
+    <img src="/Kalinux.png" alt="Logo" onerror="this.style.display='none'">
+    KaliNet
+  </a>
+  <div class="navbar-links">
+    <a href="/" class="active">Fil</a>
+    <a href="/messages">Messages</a>
+    <a href="/profile/<%= user.id %>">Profil</a>
+    <a href="/contact">Contact</a>
+    <a href="/my-tickets">Tickets</a>
+    <% if (user.is_admin) { %>
+      <a href="/admin/users" class="danger">Admin</a>
+      <a href="/admin/reports" style="color:var(--yellow)">Signalements</a>
+      <a href="/admin/messages" style="position:relative;">
+        Messages
+        <span id="unreadBadge" style="display:none;background:var(--red);color:white;border-radius:2rem;padding:0.1rem 0.4rem;font-size:0.62rem;margin-left:0.2rem;">0</span>
+      </a>
     <% } %>
+  </div>
+  <div class="navbar-user">
+    <span class="badge badge-<%= user.rank %>">
+      <% if (user.rank==='admin') { %>👑
+      <% } else if (user.rank==='vip') { %>⭐
+      <% } else if (user.rank==='premium') { %>💎
+      <% } else if (user.rank==='tester') { %>🧪
+      <% } else { %>👤<% } %>
+      <%= user.username %>
+    </span>
+    <a href="/logout" class="btn btn-ghost btn-sm">Déco</a>
+  </div>
+</nav>
+
+<div class="page-wrapper">
+
+  <div class="compose-box">
+    <textarea id="postContent" rows="3" placeholder="Partage quelque chose avec la communauté..."></textarea>
+    <div class="flex" style="justify-content:flex-end;margin-top:0.5rem;">
+      <button class="btn btn-primary btn-sm" onclick="sendPost()">Publier</button>
+    </div>
+  </div>
+
+  <div class="section-title">Fil d'actualité</div>
+
+  <% if (posts.length === 0) { %>
+    <div class="empty-state">
+      <span class="empty-icon">📭</span>
+      Aucun post pour l'instant. Sois le premier à publier !
+    </div>
+  <% } else { %>
+    <% posts.forEach(post => { %>
+      <div class="post-card" id="post-<%= post.id %>">
+        <div class="post-author">
+          <a href="/profile/<%= post.user_id %>"><%= post.users.username %></a>
+          <span class="badge badge-<%= post.users.rank %>">
+            <% if (post.users.rank==='admin') { %>👑
+            <% } else if (post.users.rank==='vip') { %>⭐
+            <% } else if (post.users.rank==='premium') { %>💎
+            <% } else if (post.users.rank==='tester') { %>🧪
+            <% } else if (post.users.rank==='banned') { %>🔒
+            <% } else { %>👤<% } %>
+            <%= post.users.rank %>
+          </span>
+          <span class="post-time ml-auto"><%= new Date(post.created_at).toLocaleString('fr-FR') %></span>
+        </div>
+        <div class="post-content"><%= post.content %></div>
+        <div class="post-actions mt-sm">
+          <% if (user.is_admin || user.id === post.user_id) { %>
+            <button class="btn btn-danger btn-sm" onclick="deletePost(<%= post.id %>)">Supprimer</button>
+          <% } %>
+          <% if (!user.is_admin && user.id !== post.user_id) { %>
+            <button class="btn btn-ghost btn-sm" onclick="reportPost(<%= post.id %>)" style="color:var(--yellow)">Signaler</button>
+          <% } %>
+        </div>
+      </div>
+    <% }) %>
+  <% } %>
+
 </div>
+
 <script>
-    async function sendPost() {
-        const content = document.getElementById('postContent').value;
-        if (!content.trim()) return alert('Message vide');
-        const res = await fetch('/api/post', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({content}) });
-        if (res.ok) location.reload();
-        else alert('Erreur');
-    }
+  async function sendPost() {
+    const content = document.getElementById('postContent').value;
+    if (!content.trim()) return;
+    const res = await fetch('/api/post', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({content}) });
+    if (res.ok) location.reload();
+    else alert('Erreur lors de la publication');
+  }
 
-    async function deletePost(postId) {
-        if (!confirm('Supprimer ce post ?')) return;
-        const res = await fetch('/api/post/delete', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ postId })
-        });
-        if (res.ok) {
-            document.getElementById(`post-${postId}`).remove();
-        } else {
-            alert('Erreur lors de la suppression');
-        }
-    }
+  async function deletePost(id) {
+    if (!confirm('Supprimer ce post ?')) return;
+    const res = await fetch('/api/post/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ postId: id }) });
+    if (res.ok) document.getElementById(`post-${id}`).remove();
+    else alert('Erreur');
+  }
 
-    async function reportPost(postId) {
-        const reason = prompt('Pourquoi signalez-vous ce post ? (max 500 caractères)');
-        if (!reason) return;
-        const res = await fetch('/api/post/report', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ postId, reason })
-        });
-        if (res.ok) {
-            alert('✅ Signalement envoyé. Merci !');
-        } else {
-            const data = await res.json();
-            alert('❌ ' + (data.error || 'Erreur'));
-        }
-    }
+  async function reportPost(id) {
+    const reason = prompt('Raison du signalement :');
+    if (!reason) return;
+    const res = await fetch('/api/post/report', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ postId: id, reason }) });
+    alert(res.ok ? '✅ Signalement envoyé' : '❌ Erreur');
+  }
 
-    async function checkUnreadMessages() {
-        <% if (user.is_admin) { %>
-            const res = await fetch('/api/admin/messages/unread-count');
-            const data = await res.json();
-            const badge = document.getElementById('unreadBadge');
-            if (badge) {
-                const count = data.count || 0;
-                badge.innerText = count;
-                badge.style.display = count > 0 ? 'inline' : 'none';
-            }
-        <% } %>
-    }
-    setInterval(checkUnreadMessages, 30000);
-    checkUnreadMessages();
+  async function checkUnread() {
+    <% if (user.is_admin) { %>
+    try {
+      const data = await (await fetch('/api/admin/messages/unread-count')).json();
+      const badge = document.getElementById('unreadBadge');
+      if (badge) { badge.innerText = data.count||0; badge.style.display = data.count > 0 ? 'inline' : 'none'; }
+    } catch(e) {}
+    <% } %>
+  }
+  setInterval(checkUnread, 30000);
+  checkUnread();
 </script>
 </body>
 </html>
