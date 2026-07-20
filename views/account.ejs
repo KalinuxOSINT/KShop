@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="icon" type="image/x-icon" href="/Favicon.ico">
+    <title>Kalinux - Mon compte</title>
+    <style>
+        body {
+            background: #0a0c12;
+            color: #eee;
+            font-family: Arial;
+            text-align: center;
+            padding: 2rem;
+        }
+        .logo { width: 60px; height: auto; }
+        .container { max-width: 500px; margin: 0 auto; background: #1a1f2e; padding: 2rem; border-radius: 1rem; }
+        a { color: #00ffcc; text-decoration: none; margin: 0 0.5rem; }
+        button { background: #ff4444; color: white; padding: 0.5rem 1rem; border-radius: 2rem; border: none; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <img src="/Kalinux.png" alt="Logo" class="logo" onerror="this.style.display='none'">
+        <h1>👤 Mon compte</h1>
+        <p><strong><%= user.username %></strong></p>
+        <p>Rôle : <% if (user.is_admin) { %>Administrateur<% } else { %>Utilisateur<% } %></p>
+        <p><a href="/">🏠 Accueil</a> | <a href="/logout">🚪 Déconnexion</a></p>
+        <% if (user.is_admin) { %>
+            <p><a href="/admin">👑 Panel Admin</a></p>
+        <% } %>
+    </div>
+</body>
+</html>

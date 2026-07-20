@@ -1,0 +1,13 @@
+# Variables d'environnement — NE JAMAIS COMMITTER
+.env
+.env.*
+
+# Dépendances
+node_modules/
+
+# Base de données locale
+database.sqlite
+
+# Logs
+*.log
+npm-debug.log*
