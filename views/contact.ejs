@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="/Favicon.ico">
+    <link rel="stylesheet" href="/style.css">
+    <title>KaliNet - Contact</title>
+</head>
+<body>
+
+<nav class="navbar">
+    <a href="/" class="navbar-brand">
+        <img src="/Kalinux.png" alt="Logo" onerror="this.style.display='none'">
+        KaliNet
+    </a>
+    <div class="navbar-links">
+        <a href="/">🏠 Fil</a>
+        <a href="/messages">💬 Messages</a>
+        <a href="/contact" class="active">📨 Contact</a>
+        <a href="/my-tickets">📋 Tickets</a>
+    </div>
+    <div class="navbar-user">
+        <a href="/logout" class="btn btn-ghost btn-sm">Déconnexion</a>
+    </div>
+</nav>
+
+<div class="page-wrapper">
+    <div class="section-title">📨 Contacter le support</div>
+
+    <div class="card">
+        <form id="contactForm">
+            <div class="form-group">
+                <label>Sujet</label>
+                <input type="text" id="subject" placeholder="Sujet de ta demande" required>
+            </div>
+            <div class="form-group">
+                <label>Message</label>
+                <textarea id="message" rows="6" placeholder="Décris ton problème ou ta question..." required></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary">📤 Envoyer</button>
+        </form>
+        <div id="result" class="mt-md"></div>
+    </div>
+</div>
+
+<script>
+    document.getElementById('contactForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const subject = document.getElementById('subject').value;
+        const message = document.getElementById('message').value;
+        const res = await fetch('/api/contact', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ subject, message }) });
+        const result = document.getElementById('result');
+        if (res.ok) {
+            result.innerHTML = '<span class="text-accent">✅ Message envoyé avec succès !</span>';
+            document.getElementById('contactForm').reset();
+        } else {
+            result.innerHTML = '<span class="text-danger">❌ Erreur lors de l\'envoi</span>';
+        }
+    });
+</script>
+</body>
+</html>
