@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" type="image/x-icon" href="/Favicon.ico">
   <link rel="stylesheet" href="/style.css">
+  <script src="/theme.js"></script>
   <title>KaliNet — <%= targetUser.username %></title>
 </head>
 <body>
@@ -56,11 +57,32 @@
     <div class="mt-md flex" style="justify-content:center;gap:0.5rem;">
       <% if (targetUser.id == user.id) { %>
         <button class="btn btn-ghost btn-sm" onclick="editBio()">✏️ Modifier ma bio</button>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('settingsPanel').scrollIntoView({behavior:'smooth'})">⚙️ Paramètres</button>
       <% } else { %>
         <a href="/messages" class="btn btn-primary btn-sm">💬 Message</a>
       <% } %>
     </div>
   </div>
+
+  <% if (targetUser.id == user.id) { %>
+  <div id="settingsPanel" class="mt-lg">
+    <div class="section-title">⚙️ Paramètres</div>
+
+    <div class="settings-section">
+      <div class="flex items-center justify-between">
+        <div>
+          <div class="settings-label">Apparence</div>
+          <div class="settings-desc">Choisis entre le mode clair et le mode sombre</div>
+        </div>
+        <button class="theme-toggle" onclick="toggleTheme()" id="themeToggleBtn">
+          <span id="themeLabel">☀️ Clair</span>
+          <div class="toggle-track"><div class="toggle-thumb"></div></div>
+        </button>
+      </div>
+    </div>
+
+  </div>
+  <% } %>
 
   <div class="section-title">Posts de <%= targetUser.username %></div>
 
@@ -81,6 +103,20 @@
 </div>
 
 <script>
+  // ===== THEME =====
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('kn-theme', theme);
+    const label = document.getElementById('themeLabel');
+    if (label) label.textContent = theme === 'dark' ? '🌙 Sombre' : '☀️ Clair';
+  }
+  function toggleTheme() {
+    const current = document.documentElement.getAttribute('data-theme') || 'light';
+    applyTheme(current === 'dark' ? 'light' : 'dark');
+  }
+  // Appliquer au chargement
+  applyTheme(localStorage.getItem('kn-theme') || 'light');
+
   function editBio() {
     const newBio = prompt('Nouvelle bio (max 300 caractères) :', '<%= (targetUser.bio || "").replace(/'/g, "\\'") %>');
     if (newBio !== null) {
