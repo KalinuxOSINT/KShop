@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/x-icon" href="/Favicon.ico">
+  <link rel="stylesheet" href="/style.css">
+  <title>KaliNet — Serveurs</title>
+</head>
+<body>
+
+<nav class="navbar">
+  <a href="/" class="navbar-brand">
+    <img src="/Kalinux.png" alt="Logo" onerror="this.style.display='none'">
+    KaliNet
+  </a>
+  <div class="navbar-links">
+    <a href="/">Fil</a>
+    <a href="/servers" class="active">Serveurs</a>
+    <a href="/messages">Messages</a>
+    <a href="/profile/<%= user.id %>">Profil</a>
+    <a href="/contact">Contact</a>
+    <% if (user.is_admin) { %>
+      <a href="/admin/users" class="danger">Admin</a>
+    <% } %>
+  </div>
+  <div class="navbar-user">
+    <span class="badge badge-<%= user.rank %>"><%= user.username %></span>
+    <a href="/logout" class="btn btn-ghost btn-sm">Déco</a>
+  </div>
+</nav>
+
+<div class="page-wrapper">
+
+  <div class="flex items-center justify-between mb-lg" style="flex-wrap:wrap;gap:0.75rem;">
+    <div>
+      <div style="font-size:1.4rem;font-weight:800;letter-spacing:-0.02em;">Serveurs</div>
+      <div class="text-sm text-muted mt-sm">Crée ou rejoins des communautés</div>
+    </div>
+    <button class="btn btn-primary" onclick="openCreateModal()">+ Créer un serveur</button>
+  </div>
+
+  <% const myServers = servers.filter(s => s.is_member); %>
+  <% const otherServers = servers.filter(s => !s.is_member); %>
+
+  <% if (myServers.length > 0) { %>
+    <div class="section-title">Mes serveurs</div>
+    <div class="servers-grid mb-lg">
+      <% myServers.forEach(s => { %>
+        <a href="/servers/<%= s.id %>" class="server-card">
+          <div class="server-icon"><%= s.icon %></div>
+          <div class="server-info">
+            <div class="server-name"><%= s.name %></div>
+            <div class="server-desc"><%= s.description || 'Aucune description' %></div>
+            <div class="server-meta text-xs text-muted mt-sm">
+              Par <strong><%= s.owner_username %></strong>
+              <% if (s.is_owner) { %><span class="badge badge-admin" style="font-size:0.6rem;margin-left:0.3rem;">Proprio</span><% } %>
+            </div>
+          </div>
+          <div class="server-arrow">›</div>
+        </a>
+      <% }) %>
+    </div>
+  <% } %>
+
+  <% if (otherServers.length > 0) { %>
+    <div class="section-title">Découvrir</div>
+    <div class="servers-grid">
+      <% otherServers.forEach(s => { %>
+        <div class="server-card" style="cursor:default;">
+          <div class="server-icon"><%= s.icon %></div>
+          <div class="server-info">
+            <div class="server-name"><%= s.name %></div>
+            <div class="server-desc"><%= s.description || 'Aucune description' %></div>
+            <div class="server-meta text-xs text-muted mt-sm">Par <strong><%= s.owner_username %></strong></div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="joinServer(<%= s.id %>)">Rejoindre</button>
+        </div>
+      <% }) %>
+    </div>
+  <% } %>
+
+  <% if (servers.length === 0) { %>
+    <div class="empty-state">
+      <span class="empty-icon">🌐</span>
+      Aucun serveur pour le moment. Crée le premier !
+    </div>
+  <% } %>
+
+</div>
+
+<!-- Modal création serveur -->
+<div id="createModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;display:none;align-items:center;justify-content:center;">
+  <div class="auth-card" style="max-width:420px;width:90%;">
+    <h2 class="auth-title" style="font-size:1.1rem;margin-bottom:1.25rem;">Créer un serveur</h2>
+    <div class="form-group">
+      <label>Icône</label>
+      <input type="text" id="serverIcon" value="🌐" maxlength="4" style="font-size:1.5rem;text-align:center;width:70px;">
+    </div>
+    <div class="form-group">
+      <label>Nom du serveur</label>
+      <input type="text" id="serverName" placeholder="Mon super serveur" maxlength="100">
+    </div>
+    <div class="form-group">
+      <label>Description</label>
+      <textarea id="serverDesc" rows="2" placeholder="De quoi parle ce serveur ?"></textarea>
+    </div>
+    <div class="flex gap-sm mt-md">
+      <button class="btn btn-primary" style="flex:1;justify-content:center;" onclick="createServer()">Créer</button>
+      <button class="btn btn-ghost" onclick="closeCreateModal()">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function openCreateModal() {
+    document.getElementById('createModal').style.display = 'flex';
+  }
+  function closeCreateModal() {
+    document.getElementById('createModal').style.display = 'none';
+  }
+  document.getElementById('createModal').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('createModal')) closeCreateModal();
+  });
+
+  async function createServer() {
+    const name = document.getElementById('serverName').value.trim();
+    const description = document.getElementById('serverDesc').value.trim();
+    const icon = document.getElementById('serverIcon').value.trim() || '🌐';
+    if (!name) return alert('Donne un nom au serveur');
+    const res = await fetch('/api/servers/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, description, icon })
+    });
+    const data = await res.json();
+    if (data.success) window.location.href = '/servers/' + data.serverId;
+    else alert('❌ ' + (data.error || 'Erreur'));
+  }
+
+  async function joinServer(id) {
+    const res = await fetch(`/api/servers/${id}/join`, { method: 'POST' });
+    const data = await res.json();
+    if (data.success) window.location.href = '/servers/' + id;
+    else alert('❌ ' + (data.error || 'Erreur'));
+  }
+</script>
+</body>
+</html>

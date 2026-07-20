@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/x-icon" href="/Favicon.ico">
+  <link rel="stylesheet" href="/style.css">
+  <title>KaliNet — Messages admin</title>
+</head>
+<body>
+
+<nav class="navbar">
+  <a href="/" class="navbar-brand">
+    <img src="/Kalinux.png" alt="Logo" onerror="this.style.display='none'">
+    KaliNet
+  </a>
+  <div class="navbar-links">
+    <a href="/">Fil</a>
+    <a href="/admin/users" class="danger">Utilisateurs</a>
+    <a href="/admin/reports" style="color:var(--yellow)">Signalements</a>
+    <a href="/admin/messages" class="active" style="color:var(--blue)">Messages</a>
+  </div>
+  <div class="navbar-user">
+    <span class="badge badge-admin">👑 Admin</span>
+    <a href="/logout" class="btn btn-ghost btn-sm">Déco</a>
+  </div>
+</nav>
+
+<div class="page-wrapper">
+  <div class="section-title">Messages reçus</div>
+
+  <% if (messages.length === 0) { %>
+    <div class="empty-state">
+      <span class="empty-icon">📭</span>
+      Aucun message pour le moment.
+    </div>
+  <% } else { %>
+    <% messages.forEach(m => { %>
+      <div class="ticket-card <%= m.status %>" id="msg-<%= m.id %>">
+
+        <div class="flex items-center gap-sm mb-sm" style="flex-wrap:wrap;">
+          <span class="ticket-subject"><%= m.subject %></span>
+          <span class="status-badge status-<%= m.status %>">
+            <% if (m.status==='pending') { %>⏳ En attente
+            <% } else if (m.status==='replied') { %>💬 Répondu
+            <% } else { %>✅ Résolu<% } %>
+          </span>
+          <span class="text-xs text-muted ml-auto"><%= new Date(m.created_at).toLocaleString('fr-FR') %></span>
+        </div>
+
+        <div class="text-sm mb-sm">
+          De <strong class="text-accent"><%= m.users.username %></strong>
+          <span class="text-muted text-xs">(ID: <%= m.user_id %>)</span>
+        </div>
+
+        <div class="ticket-message"><%= m.message %></div>
+
+        <% if (m.admin_reply) { %>
+          <div class="ticket-reply mt-sm">
+            <div class="text-xs text-muted mb-sm">Ta réponse</div>
+            <%= m.admin_reply %>
+          </div>
+        <% } %>
+
+        <div class="flex gap-sm mt-md" style="flex-wrap:wrap;">
+          <button class="btn btn-info btn-sm" onclick="showReplyForm(<%= m.id %>)">Répondre</button>
+          <button class="btn btn-green btn-sm" onclick="resolveMessage(<%= m.id %>)">Marquer résolu</button>
+        </div>
+
+        <div id="reply-form-<%= m.id %>" style="display:none;margin-top:0.85rem;">
+          <div class="form-group mb-sm">
+            <textarea id="reply-text-<%= m.id %>" rows="3" placeholder="Écris ta réponse..."></textarea>
+          </div>
+          <div class="flex gap-sm">
+            <button class="btn btn-primary btn-sm" onclick="sendReply(<%= m.id %>)">Envoyer</button>
+            <button class="btn btn-ghost btn-sm" onclick="hideReplyForm(<%= m.id %>)">Annuler</button>
+          </div>
+        </div>
+
+      </div>
+    <% }) %>
+  <% } %>
+</div>
+
+<script>
+  function showReplyForm(id) { document.getElementById(`reply-form-${id}`).style.display = 'block'; }
+  function hideReplyForm(id) { document.getElementById(`reply-form-${id}`).style.display = 'none'; }
+
+  async function sendReply(id) {
+    const reply = document.getElementById(`reply-text-${id}`).value;
+    if (!reply.trim()) return alert('Écris une réponse');
+    const res = await fetch('/api/admin/messages/reply', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ messageId: id, reply }) });
+    if (res.ok) location.reload(); else alert('Erreur');
+  }
+
+  async function resolveMessage(id) {
+    const res = await fetch('/api/admin/messages/resolve', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ messageId: id }) });
+    if (res.ok) location.reload(); else alert('Erreur');
+  }
+</script>
+</body>
+</html>
