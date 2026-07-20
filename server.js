@@ -26,23 +26,46 @@ const supabase = createClient(
 // Désactive la vérification SSL pour Supabase pooler (certificat auto-signé)
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
-// ========== SESSION STORE ==========
-const pg = require('pg');
-const pgPool = new pg.Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false }
-});
+// ========== SESSION STORE (Supabase custom) ==========
+const Store = require('express-session').Store;
+
+class SupabaseStore extends Store {
+    constructor(supabaseClient) {
+        super();
+        this.supabase = supabaseClient;
+    }
+    async get(sid, callback) {
+        try {
+            const { data } = await this.supabase.from('session').select('sess, expire').eq('sid', sid).single();
+            if (!data) return callback(null, null);
+            if (new Date(data.expire) < new Date()) {
+                await this.destroy(sid, () => {});
+                return callback(null, null);
+            }
+            callback(null, data.sess);
+        } catch (e) { callback(null, null); }
+    }
+    async set(sid, session, callback) {
+        try {
+            const expire = new Date(Date.now() + (session.cookie?.maxAge || 86400000));
+            await this.supabase.from('session').upsert({ sid, sess: session, expire });
+            callback(null);
+        } catch (e) { callback(e); }
+    }
+    async destroy(sid, callback) {
+        try {
+            await this.supabase.from('session').delete().eq('sid', sid);
+            callback(null);
+        } catch (e) { callback(e); }
+    }
+}
 
 // ========== MIDDLEWARE ==========
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 app.use(session({
-    store: new pgSession({
-        pool: pgPool,
-        tableName: 'session',
-        createTableIfMissing: true
-    }),
+    store: new SupabaseStore(supabase),
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
