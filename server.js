@@ -19,44 +19,104 @@ const PORT = process.env.PORT || 8080;
 
 app.set('trust proxy', 1);
 
+// ========== TIMEOUT ANTI-SLOWLORIS ==========
+// Coupe les connexions qui restent ouvertes trop longtemps sans envoyer de données
+app.use((req, res, next) => {
+    req.setTimeout(10000, () => {
+        res.status(408).send('Request Timeout');
+    });
+    res.setTimeout(10000, () => {
+        res.status(408).send('Response Timeout');
+    });
+    next();
+});
+
+// ========== LIMITE TAILLE DES REQUÊTES ==========
+// Rejette les requêtes avec un body trop grand
+app.use((req, res, next) => {
+    const contentLength = parseInt(req.headers['content-length'] || '0');
+    if (contentLength > 8 * 1024) { // max 8KB
+        return res.status(413).send('Payload trop grand.');
+    }
+    next();
+});
+
 // ========== PROTECTION DDOS / RATE LIMITING ==========
-const rateLimit = new Map();
-const RATE_WINDOW = 60 * 1000; // 1 minute
-const RATE_MAX    = 120;        // max 120 requêtes par minute par IP
-const RATE_BAN    = 10 * 60 * 1000; // ban 10 min si dépassé
-const bannedIPs   = new Map();
+const rateLimit    = new Map();
+const postLimit    = new Map();
+const registerLimit= new Map(); // rate limit ultra-strict sur /register
+const bannedIPs    = new Map();
+
+const RATE_WINDOW       = 60 * 1000;
+const RATE_MAX          = 80;        // 80 req/min global
+const POST_MAX          = 8;         // 8 POST/min
+const REGISTER_MAX      = 3;         // max 3 inscriptions/min par IP
+const RATE_BAN          = 30 * 60 * 1000; // ban 30 min
+
+// Patterns de pseudos suspects (raid bot)
+const SUSPICIOUS_USERNAME = /^[A-Z0-9]{15,}$/; // que majuscules + chiffres, 15+ chars
+
+// Mots interdits dans les posts
+const BANNED_WORDS = ['wazroshh', 'raidded', 'raided', 'mq2b'];
+
+function getIP(req) {
+    return (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim();
+}
+
+function checkLimit(map, key, max, window) {
+    const now = Date.now();
+    if (!map.has(key)) { map.set(key, { count: 1, start: now }); return false; }
+    const entry = map.get(key);
+    if (now - entry.start > window) { entry.count = 1; entry.start = now; return false; }
+    entry.count++;
+    return entry.count > max;
+}
+
+// Nettoyage toutes les 5 minutes
+setInterval(() => {
+    const now = Date.now();
+    for (const [k, v] of rateLimit)     { if (now - v.start > RATE_WINDOW * 2)  rateLimit.delete(k); }
+    for (const [k, v] of postLimit)     { if (now - v.start > RATE_WINDOW * 2)  postLimit.delete(k); }
+    for (const [k, v] of registerLimit) { if (now - v.start > RATE_WINDOW * 2)  registerLimit.delete(k); }
+    for (const [k, v] of bannedIPs)     { if (now > v) bannedIPs.delete(k); }
+}, 5 * 60 * 1000);
 
 app.use((req, res, next) => {
-    const ip = req.ip || req.connection.remoteAddress;
+    const ip  = getIP(req);
     const now = Date.now();
 
     // IP bannie ?
-    if (bannedIPs.has(ip)) {
-        const until = bannedIPs.get(ip);
-        if (now < until) {
-            return res.status(429).send('Trop de requêtes. Réessaie plus tard.');
-        }
-        bannedIPs.delete(ip);
+    if (bannedIPs.has(ip) && now < bannedIPs.get(ip)) {
+        const remaining = Math.ceil((bannedIPs.get(ip) - now) / 60000);
+        return res.status(429).end();
     }
 
-    // Compteur de requêtes
-    if (!rateLimit.has(ip)) {
-        rateLimit.set(ip, { count: 1, start: now });
-    } else {
-        const entry = rateLimit.get(ip);
-        if (now - entry.start > RATE_WINDOW) {
-            entry.count = 1;
-            entry.start = now;
-        } else {
-            entry.count++;
-            if (entry.count > RATE_MAX) {
-                bannedIPs.set(ip, now + RATE_BAN);
-                rateLimit.delete(ip);
-                console.warn(`[DDoS] IP bannie temporairement : ${ip}`);
-                return res.status(429).send('Trop de requêtes. Réessaie dans 10 minutes.');
-            }
+    // Rate limit global
+    if (checkLimit(rateLimit, ip, RATE_MAX, RATE_WINDOW)) {
+        bannedIPs.set(ip, now + RATE_BAN);
+        rateLimit.delete(ip);
+        console.warn(`[DDoS] ban global: ${ip}`);
+        return res.status(429).end();
+    }
+
+    // Rate limit POST
+    if (req.method === 'POST') {
+        if (checkLimit(postLimit, ip, POST_MAX, RATE_WINDOW)) {
+            bannedIPs.set(ip, now + RATE_BAN);
+            console.warn(`[DDoS] ban POST flood: ${ip}`);
+            return res.status(429).end();
         }
     }
+
+    // Rate limit ultra-strict sur /register
+    if (req.method === 'POST' && req.path === '/register') {
+        if (checkLimit(registerLimit, ip, REGISTER_MAX, RATE_WINDOW)) {
+            bannedIPs.set(ip, now + RATE_BAN);
+            console.warn(`[DDoS] ban register flood: ${ip}`);
+            return res.status(429).end();
+        }
+    }
+
     next();
 });
 
@@ -222,9 +282,22 @@ app.post('/login', async (req, res) => {
 app.post('/register', async (req, res) => {
     const { username, password } = req.body;
 
-    // Vérifier pseudo interdit
+    // Vérifier pseudo interdit (liste noire)
     const isBanned = BANNED_USERNAMES.some(b => username.toLowerCase().includes(b.toLowerCase()));
-    if (isBanned) return res.send('❌ Ce pseudo n\'est pas autorisé.');
+    if (isBanned) return res.status(403).send('❌ Ce pseudo n\'est pas autorisé.');
+
+    // Bloquer les pseudos générés par bot (que majuscules + chiffres, 15+ chars)
+    if (SUSPICIOUS_USERNAME.test(username)) {
+        const ip = getIP(req);
+        bannedIPs.set(ip, Date.now() + RATE_BAN);
+        console.warn(`[BOT] pseudo suspect banni: ${username} - ${ip}`);
+        return res.status(403).send('❌ Pseudo invalide.');
+    }
+
+    // Valider longueur pseudo
+    if (!username || username.length < 3 || username.length > 30) {
+        return res.status(400).send('❌ Pseudo invalide (3-30 caractères).');
+    }
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const { error } = await supabase
@@ -268,6 +341,18 @@ app.get('/', requireAuth, async (req, res) => {
 app.post('/api/post', requireAuth, async (req, res) => {
     const { content } = req.body;
     if (!content || content.length > 500) return res.status(400).json({ error: 'Message trop long' });
+
+    // Bloquer les messages contenant des mots de raid
+    const contentLower = content.toLowerCase();
+    const hasBannedWord = BANNED_WORDS.some(w => contentLower.includes(w));
+    if (hasBannedWord) {
+        const ip = getIP(req);
+        bannedIPs.set(ip, Date.now() + RATE_BAN);
+        await supabase.from('users').update({ rank: 'banned' }).eq('id', req.session.userId);
+        console.warn(`[BOT] raid post, compte banni: ${req.session.user?.username} - ${ip}`);
+        return res.status(403).json({ error: 'Contenu interdit' });
+    }
+
     const { error } = await supabase.from('posts').insert({ user_id: req.session.userId, content });
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true });
