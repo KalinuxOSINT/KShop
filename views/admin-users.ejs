@@ -1,275 +1,139 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <link rel="icon" type="image/x-icon" href="/Favicon.ico">
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kalinux - Gestion des utilisateurs</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body {
-            background: #0a0c12;
-            color: #e3e3e3;
-            font-family: 'Segoe UI', 'Courier New', monospace;
-            padding: 2rem;
-        }
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-        .header {
-            text-align: center;
-            border-bottom: 2px solid #00ffcc;
-            padding-bottom: 1rem;
-            margin-bottom: 2rem;
-        }
-        .header h1 {
-            font-size: 2.5rem;
-            background: linear-gradient(135deg, #00ffcc, #ff44cc);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-        }
-        .back-link {
-            display: inline-block;
-            margin-top: 1rem;
-            color: #00ffcc;
-            text-decoration: none;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            background: #11141f;
-            border-radius: 1rem;
-            overflow: hidden;
-        }
-        th, td {
-            padding: 1rem;
-            text-align: left;
-            border-bottom: 1px solid #2a2e3f;
-        }
-        th {
-            background: #1a1f2e;
-            color: #00ffcc;
-            font-weight: bold;
-        }
-        tr:hover {
-            background: #1e2332;
-        }
-        .rank-badge {
-            display: inline-block;
-            padding: 0.2rem 0.8rem;
-            border-radius: 2rem;
-            font-size: 0.8rem;
-            font-weight: bold;
-        }
-        .rank-admin { background: #ff4444; color: white; }
-        .rank-vip { background: #ffaa00; color: black; }
-        .rank-premium { background: #aa44ff; color: white; }
-        .rank-user { background: #2a2e3f; color: #00ffcc; }
-        .rank-banned { background: #222; color: #ff4444; text-decoration: line-through; }
-        .rank-tester { background: #00aaff; color: black; }
-        select, button {
-            padding: 0.4rem 0.8rem;
-            border-radius: 0.5rem;
-            border: none;
-            cursor: pointer;
-            font-family: monospace;
-        }
-        select {
-            background: #1e2332;
-            color: white;
-            border: 1px solid #2a2e3f;
-        }
-        button {
-            background: #00ffcc;
-            color: black;
-            font-weight: bold;
-        }
-        button.delete-btn {
-            background: #ff4444;
-            color: white;
-        }
-        .search-box {
-            margin-bottom: 1rem;
-            display: flex;
-            gap: 0.5rem;
-        }
-        .search-box input {
-            flex: 1;
-            padding: 0.5rem;
-            background: #1e2332;
-            border: 1px solid #2a2e3f;
-            border-radius: 0.5rem;
-            color: white;
-        }
-        .stats {
-            margin: 1rem 0;
-            padding: 1rem;
-            background: #1a1f2e;
-            border-radius: 0.5rem;
-            display: inline-block;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/x-icon" href="/Favicon.ico">
+  <link rel="stylesheet" href="/style.css">
+  <title>KaliNet — Gestion des utilisateurs</title>
 </head>
 <body>
-<div class="container">
-    <div class="header">
-        <h1>👥 Gestion des utilisateurs</h1>
-        <p>Attribuer des rangs, modifier, supprimer</p>
-        <a href="/" class="back-link">← Retour à l'accueil</a>
-    </div>
 
-    <div class="stats">
-        📊 Total utilisateurs : <strong id="totalUsers">0</strong> | 
-        👑 Admins : <strong id="totalAdmins">0</strong> | 
-        ⭐ VIP : <strong id="totalVip">0</strong> | 
-        💎 Premium : <strong id="totalPremium">0</strong>
-    </div>
+<nav class="navbar">
+  <a href="/" class="navbar-brand">
+    <img src="/Kalinux.png" alt="Logo" onerror="this.style.display='none'">
+    KaliNet
+  </a>
+  <div class="navbar-links">
+    <a href="/">Fil</a>
+    <a href="/admin/users" class="active danger">Utilisateurs</a>
+    <a href="/admin/reports" style="color:var(--yellow)">Signalements</a>
+    <a href="/admin/messages" style="color:var(--blue)">Messages</a>
+  </div>
+  <div class="navbar-user">
+    <span class="badge badge-admin">👑 Admin</span>
+    <a href="/logout" class="btn btn-ghost btn-sm">Déco</a>
+  </div>
+</nav>
 
-    <div class="search-box">
-        <input type="text" id="searchInput" placeholder="🔍 Rechercher un utilisateur...">
-    </div>
+<div class="page-wrapper" style="max-width:1100px;">
 
-    <div style="overflow-x: auto;">
-         <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Pseudo</th>
-                    <th>Rang actuel</th>
-                    <th>Nouveau rang</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody id="usersTableBody">
-                <tr><td colspan="5">Chargement...</td></tr>
-            </tbody>
-         </table>
+  <div class="flex items-center justify-between mb-md" style="flex-wrap:wrap;gap:0.75rem;">
+    <div class="section-title" style="margin-bottom:0;">Gestion des utilisateurs</div>
+    <div id="statsBar" class="flex gap-sm" style="flex-wrap:wrap;font-size:0.75rem;color:var(--text2);">
+      <span>Total : <strong id="totalUsers" class="text-accent">—</strong></span>
+      <span>·</span>
+      <span>Admins : <strong id="totalAdmins" style="color:var(--red)">—</strong></span>
+      <span>·</span>
+      <span>VIP : <strong id="totalVip" style="color:var(--yellow)">—</strong></span>
+      <span>·</span>
+      <span>Premium : <strong id="totalPremium" style="color:#a78bfa">—</strong></span>
     </div>
+  </div>
+
+  <div class="form-group mb-md">
+    <input type="text" id="searchInput" placeholder="Rechercher un utilisateur...">
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Pseudo</th>
+          <th>Rang actuel</th>
+          <th>Modifier le rang</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="usersTableBody">
+        <tr><td colspan="5" class="text-muted text-sm" style="padding:1.5rem;text-align:center;">Chargement...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
 </div>
 
 <script>
-    let usersData = [];
+  let usersData = [];
 
-    async function loadUsers() {
-        const response = await fetch('/api/admin/users');
-        usersData = await response.json();
-        updateStats();
-        renderTable();
+  async function loadUsers() {
+    const res = await fetch('/api/admin/users');
+    usersData = await res.json();
+    updateStats();
+    renderTable();
+  }
+
+  function updateStats() {
+    document.getElementById('totalUsers').innerText  = usersData.length;
+    document.getElementById('totalAdmins').innerText = usersData.filter(u => u.rank === 'admin').length;
+    document.getElementById('totalVip').innerText    = usersData.filter(u => u.rank === 'vip').length;
+    document.getElementById('totalPremium').innerText= usersData.filter(u => u.rank === 'premium').length;
+  }
+
+  const rankLabel = { admin:'👑 Admin', vip:'⭐ VIP', premium:'💎 Premium', banned:'🔒 Banni', tester:'🧪 Testeur', user:'👤 Membre' };
+
+  function renderTable() {
+    const q = document.getElementById('searchInput').value.toLowerCase();
+    const list = usersData.filter(u => u.username.toLowerCase().includes(q));
+    const tbody = document.getElementById('usersTableBody');
+    if (!list.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="text-muted text-sm" style="padding:1.5rem;text-align:center;">Aucun utilisateur trouvé</td></tr>';
+      return;
     }
+    tbody.innerHTML = list.map(u => `
+      <tr>
+        <td class="text-muted text-xs">${u.id}</td>
+        <td><strong>${escapeHtml(u.username)}</strong></td>
+        <td><span class="badge badge-${u.rank}">${rankLabel[u.rank] || u.rank}</span></td>
+        <td>
+          <select id="rank-select-${u.id}" style="width:auto;padding:0.3rem 0.5rem;font-size:0.8rem;">
+            <option value="user"    ${u.rank==='user'    ?'selected':''}>👤 Membre</option>
+            <option value="vip"     ${u.rank==='vip'     ?'selected':''}>⭐ VIP</option>
+            <option value="premium" ${u.rank==='premium' ?'selected':''}>💎 Premium</option>
+            <option value="tester"  ${u.rank==='tester'  ?'selected':''}>🧪 Testeur</option>
+            <option value="banned"  ${u.rank==='banned'  ?'selected':''}>🔒 Banni</option>
+            <option value="admin"   ${u.rank==='admin'   ?'selected':''}>👑 Admin</option>
+          </select>
+        </td>
+        <td class="flex gap-sm" style="flex-wrap:wrap;">
+          <button class="btn btn-green btn-sm" onclick="updateRank(${u.id})">Appliquer</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteUser(${u.id})">Supprimer</button>
+        </td>
+      </tr>
+    `).join('');
+  }
 
-    function updateStats() {
-        document.getElementById('totalUsers').innerText = usersData.length;
-        document.getElementById('totalAdmins').innerText = usersData.filter(u => u.rank === 'admin').length;
-        document.getElementById('totalVip').innerText = usersData.filter(u => u.rank === 'vip').length;
-        document.getElementById('totalPremium').innerText = usersData.filter(u => u.rank === 'premium').length;
-    }
+  async function updateRank(userId) {
+    const rank = document.getElementById(`rank-select-${userId}`).value;
+    const res = await fetch('/api/admin/users/rank', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ userId, rank }) });
+    if (res.ok) loadUsers();
+    else alert('❌ Erreur');
+  }
 
-    function getRankClass(rank) {
-        switch(rank) {
-            case 'admin': return 'rank-admin';
-            case 'vip': return 'rank-vip';
-            case 'premium': return 'rank-premium';
-            case 'banned': return 'rank-banned';
-            case 'tester': return 'rank-tester';
-            default: return 'rank-user';
-        }
-    }
+  async function deleteUser(userId) {
+    if (!confirm('Supprimer définitivement cet utilisateur ?')) return;
+    const res = await fetch('/api/admin/users/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ userId }) });
+    if (res.ok) loadUsers();
+    else { const d = await res.json(); alert('❌ ' + (d.error || 'Erreur')); }
+  }
 
-    function getRankLabel(rank) {
-        switch(rank) {
-            case 'admin': return '👑 Admin';
-            case 'vip': return '⭐ VIP';
-            case 'premium': return '💎 Premium';
-            case 'banned': return '🔒 Banni';
-            case 'tester': return '🧪 Testeur';
-            default: return '👤 Utilisateur';
-        }
-    }
+  function escapeHtml(s) {
+    return s.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));
+  }
 
-    function renderTable() {
-        const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-        const filtered = usersData.filter(u => u.username.toLowerCase().includes(searchTerm));
-        
-        const tbody = document.getElementById('usersTableBody');
-        if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5">Aucun utilisateur trouvé</td></tr>';
-            return;
-        }
-        
-        tbody.innerHTML = filtered.map(user => `
-            <tr>
-                <td>${user.id}</td>
-                <td><strong>${escapeHtml(user.username)}</strong></td>
-                <td><span class="rank-badge ${getRankClass(user.rank)}">${getRankLabel(user.rank)}</span></td>
-                <td>
-                    <select id="rank-select-${user.id}">
-                        <option value="user" ${user.rank === 'user' ? 'selected' : ''}>👤 Utilisateur</option>
-                        <option value="vip" ${user.rank === 'vip' ? 'selected' : ''}>⭐ VIP</option>
-                        <option value="premium" ${user.rank === 'premium' ? 'selected' : ''}>💎 Premium</option>
-                        <option value="tester" ${user.rank === 'tester' ? 'selected' : ''}>🧪 Testeur</option>
-                        <option value="banned" ${user.rank === 'banned' ? 'selected' : ''}>🔒 Banni</option>
-                        <option value="admin" ${user.rank === 'admin' ? 'selected' : ''}>👑 Admin</option>
-                    </select>
-                </td>
-                <td>
-                    <button onclick="updateRank(${user.id})">✅ Appliquer</button>
-                    <button class="delete-btn" onclick="deleteUser(${user.id})">🗑️ Supprimer</button>
-                </td>
-            </tr>
-        `).join('');
-    }
-
-    async function updateRank(userId) {
-        const select = document.getElementById(`rank-select-${userId}`);
-        const newRank = select.value;
-        
-        const response = await fetch('/api/admin/users/rank', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId, rank: newRank })
-        });
-        
-        if (response.ok) {
-            loadUsers();
-        } else {
-            alert('❌ Erreur lors de la mise à jour du rang');
-        }
-    }
-
-    async function deleteUser(userId) {
-        if (!confirm('⚠️ Supprimer définitivement cet utilisateur ?')) return;
-        
-        const response = await fetch('/api/admin/users/delete', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId })
-        });
-        
-        if (response.ok) {
-            loadUsers();
-        } else {
-            const data = await response.json();
-            alert('❌ ' + (data.error || 'Erreur lors de la suppression'));
-        }
-    }
-
-    function escapeHtml(str) {
-        return str.replace(/[&<>]/g, function(m) {
-            if (m === '&') return '&amp;';
-            if (m === '<') return '&lt;';
-            if (m === '>') return '&gt;';
-            return m;
-        });
-    }
-
-    document.getElementById('searchInput').addEventListener('input', renderTable);
-    loadUsers();
+  document.getElementById('searchInput').addEventListener('input', renderTable);
+  loadUsers();
 </script>
 </body>
 </html>

@@ -1,66 +1,78 @@
 <!DOCTYPE html>
-<html>
+<html lang="fr">
 <head>
-    <link rel="icon" type="image/x-icon" href="/Favicon.ico">
-    <title>KaliNet - Signalements</title>
-    <style>
-        body{background:#0a0c12;color:#eee;font-family:Arial;padding:2rem;}
-        .container{max-width:1000px;margin:0 auto;}
-        .report-card{background:#1a1f2e;border-radius:1rem;padding:1rem;margin-bottom:1rem;border-left:4px solid #ffaa00;}
-        .report-card.resolved{border-left-color:#00ffcc;opacity:0.7;}
-        .post-content{background:#0a0c12;padding:0.5rem;border-radius:0.5rem;margin:0.5rem 0;}
-        button{background:#ff4444;color:white;padding:0.5rem 1rem;border:none;border-radius:2rem;cursor:pointer;}
-        .nav a{color:#00ffcc;text-decoration:none;margin-right:1rem;}
-        .ignore-btn{background:#00aaff;}
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/x-icon" href="/Favicon.ico">
+  <link rel="stylesheet" href="/style.css">
+  <title>KaliNet — Signalements</title>
 </head>
 <body>
-<div class="container">
-    <div class="nav">
-        <a href="/admin/users">👥 Utilisateurs</a>
-        <a href="/admin/messages">📩 Messages</a>
-        <a href="/">🏠 Accueil</a>
+
+<nav class="navbar">
+  <a href="/" class="navbar-brand">
+    <img src="/Kalinux.png" alt="Logo" onerror="this.style.display='none'">
+    KaliNet
+  </a>
+  <div class="navbar-links">
+    <a href="/">Fil</a>
+    <a href="/admin/users" class="danger">Utilisateurs</a>
+    <a href="/admin/reports" class="active" style="color:var(--yellow)">Signalements</a>
+    <a href="/admin/messages" style="color:var(--blue)">Messages</a>
+  </div>
+  <div class="navbar-user">
+    <span class="badge badge-admin">👑 Admin</span>
+    <a href="/logout" class="btn btn-ghost btn-sm">Déco</a>
+  </div>
+</nav>
+
+<div class="page-wrapper">
+  <div class="section-title">Signalements</div>
+
+  <% if (reports.length === 0) { %>
+    <div class="empty-state">
+      <span class="empty-icon">✅</span>
+      Aucun signalement en attente.
     </div>
-    <h1>🚩 Signalements</h1>
-    <% if (reports.length === 0) { %>
-        <p>Aucun signalement.</p>
-    <% } else { %>
-        <% reports.forEach(r => { %>
-            <div class="report-card <%= r.status %>">
-                <div><strong>📅 <%= new Date(r.created_at).toLocaleString() %></strong></div>
-                <div>👤 Signalé par : <strong><%= r.reporter?.username %></strong></div>
-                <div>📝 Raison : <em><%= r.reason %></em></div>
-                <div class="post-content">
-                    <strong>Post incriminé :</strong><br>
-                    "<%= r.posts?.content %>"<br>
-                    <small>par <%= r.posts?.users?.username %></small>
-                </div>
-                <button onclick="deletePost(<%= r.posts?.id %>, <%= r.id %>)">🗑️ Supprimer le post</button>
-                <button class="ignore-btn" onclick="ignoreReport(<%= r.id %>)">✅ Ignorer</button>
-            </div>
-        <% }) %>
-    <% } %>
+  <% } else { %>
+    <% reports.forEach(r => { %>
+      <div class="ticket-card <%= r.status === 'resolved' ? 'resolved' : 'pending' %>" style="border-left-color:var(--yellow);">
+        <div class="flex items-center gap-sm mb-sm" style="flex-wrap:wrap;">
+          <span class="ticket-subject">Signalement</span>
+          <span class="status-badge <%= r.status === 'resolved' ? 'status-resolved' : 'status-pending' %>">
+            <%= r.status === 'resolved' ? '✅ Traité' : '⏳ En attente' %>
+          </span>
+          <span class="text-xs text-muted ml-auto"><%= new Date(r.created_at).toLocaleString('fr-FR') %></span>
+        </div>
+        <div class="text-sm mb-sm">
+          Signalé par <strong><%= r.reporter?.username %></strong>
+          — Raison : <em><%= r.reason %></em>
+        </div>
+        <div class="ticket-message">
+          <div class="text-xs text-muted mb-sm">Post incriminé par <strong><%= r.posts?.users?.username %></strong></div>
+          "<%= r.posts?.content %>"
+        </div>
+        <% if (r.status !== 'resolved') { %>
+          <div class="flex gap-sm mt-sm">
+            <button class="btn btn-danger btn-sm" onclick="deletePost(<%= r.posts?.id %>, <%= r.id %>)">Supprimer le post</button>
+            <button class="btn btn-ghost btn-sm" onclick="ignoreReport(<%= r.id %>)" style="color:var(--green)">Ignorer</button>
+          </div>
+        <% } %>
+      </div>
+    <% }) %>
+  <% } %>
 </div>
+
 <script>
-    async function deletePost(postId, reportId) {
-        if (!confirm('Supprimer ce post ?')) return;
-        const res = await fetch('/api/admin/reports/delete-post', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ postId, reportId })
-        });
-        if (res.ok) location.reload();
-        else alert('Erreur');
-    }
-    async function ignoreReport(reportId) {
-        const res = await fetch('/api/admin/reports/ignore', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ reportId })
-        });
-        if (res.ok) location.reload();
-        else alert('Erreur');
-    }
+  async function deletePost(postId, reportId) {
+    if (!confirm('Supprimer ce post ?')) return;
+    const res = await fetch('/api/admin/reports/delete-post', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ postId, reportId }) });
+    if (res.ok) location.reload(); else alert('Erreur');
+  }
+  async function ignoreReport(reportId) {
+    const res = await fetch('/api/admin/reports/ignore', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ reportId }) });
+    if (res.ok) location.reload(); else alert('Erreur');
+  }
 </script>
 </body>
 </html>
