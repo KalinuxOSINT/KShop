@@ -131,7 +131,13 @@ app.post('/login', async (req, res) => {
     }
     req.session.userId = user.id;
     req.session.user = user;
-    res.redirect('/');
+    req.session.save((err) => {
+        if (err) {
+            console.error('Erreur sauvegarde session:', err);
+            return res.send('❌ Erreur de session. <a href="/login">Réessayer</a>');
+        }
+        res.redirect('/');
+    });
 });
 
 app.post('/register', async (req, res) => {
