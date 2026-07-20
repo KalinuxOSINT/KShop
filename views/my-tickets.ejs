@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="/Favicon.ico">
+    <link rel="stylesheet" href="/style.css">
+    <title>KaliNet - Mes tickets</title>
+</head>
+<body>
+
+<nav class="navbar">
+    <a href="/" class="navbar-brand">
+        <img src="/Kalinux.png" alt="Logo" onerror="this.style.display='none'">
+        KaliNet
+    </a>
+    <div class="navbar-links">
+        <a href="/">🏠 Fil</a>
+        <a href="/contact">📨 Contact</a>
+        <a href="/my-tickets" class="active">📋 Tickets</a>
+    </div>
+    <div class="navbar-user">
+        <a href="/logout" class="btn btn-ghost btn-sm">Déconnexion</a>
+    </div>
+</nav>
+
+<div class="page-wrapper">
+    <div class="section-title">📋 Mes tickets</div>
+
+    <% if (tickets.length === 0) { %>
+        <div class="empty-state">
+            <div class="empty-icon">📭</div>
+            Aucun ticket. <a href="/contact" class="text-accent">Contacter le support</a>
+        </div>
+    <% } else { %>
+        <% tickets.forEach(t => { %>
+            <div class="ticket-card <%= t.status %>">
+                <div class="flex items-center gap-sm mb-sm">
+                    <span class="ticket-subject"><%= t.subject %></span>
+                    <span class="status-badge status-<%= t.status %>">
+                        <% if (t.status === 'pending') { %>⏳ En attente
+                        <% } else if (t.status === 'replied') { %>💬 Répondu
+                        <% } else { %>✅ Résolu<% } %>
+                    </span>
+                </div>
+                <div class="ticket-message"><%= t.message %></div>
+                <% if (t.admin_reply) { %>
+                    <div class="ticket-reply mt-sm">
+                        <div class="text-xs text-muted mb-sm">🔹 Réponse de l'admin</div>
+                        <%= t.admin_reply %>
+                        <div class="ticket-meta mt-sm"><%= new Date(t.replied_at).toLocaleString('fr-FR') %></div>
+                    </div>
+                <% } %>
+                <div class="ticket-meta mt-sm">Envoyé le <%= new Date(t.created_at).toLocaleString('fr-FR') %></div>
+            </div>
+        <% }) %>
+    <% } %>
+</div>
+</body>
+</html>

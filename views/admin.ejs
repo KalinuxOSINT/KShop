@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="/Favicon.ico">
+    <link rel="stylesheet" href="/style.css">
+    <title>KaliNet - Panel Admin</title>
+</head>
+<body>
+
+<nav class="navbar">
+    <a href="/" class="navbar-brand">
+        <img src="/Kalinux.png" alt="Logo" onerror="this.style.display='none'">
+        KaliNet
+    </a>
+    <div class="navbar-links">
+        <a href="/">🏠 Accueil</a>
+        <a href="/admin/users" class="active danger">👥 Utilisateurs</a>
+        <a href="/admin/messages" style="color:var(--blue)">📩 Messages</a>
+        <a href="/admin/reports" style="color:var(--yellow)">🚩 Signalements</a>
+    </div>
+    <div class="navbar-user">
+        <a href="/logout" class="btn btn-ghost btn-sm">Déconnexion</a>
+    </div>
+</nav>
+
+<div class="page-wrapper">
+    <div class="section-title">👑 Panel Admin</div>
+
+    <div class="card mb-lg">
+        <div class="section-title">➕ Ajouter un cheat</div>
+        <form method="post" action="/admin/products/add" class="flex gap-sm" style="flex-wrap:wrap;">
+            <input type="text" name="name" placeholder="Nom du cheat" required style="flex:1;min-width:150px;">
+            <input type="text" name="description" placeholder="Description" style="flex:2;min-width:150px;">
+            <input type="number" name="price" placeholder="Prix (centimes)" required style="width:150px;">
+            <input type="text" name="category" placeholder="Catégorie" style="width:150px;">
+            <button type="submit" class="btn btn-primary">Ajouter</button>
+        </form>
+    </div>
+
+    <div class="section-title">📦 Cheats existants</div>
+
+    <% if (products && products.length > 0) { %>
+        <% products.forEach(p => { %>
+            <div class="card mb-sm">
+                <div class="flex items-center gap-md">
+                    <div style="flex:1;">
+                        <div class="font-bold"><%= p.name %></div>
+                        <div class="text-sm text-muted"><%= p.description %></div>
+                        <div class="text-sm mt-sm">
+                            <span class="text-accent"><%= (p.price/100).toFixed(2) %> €</span>
+                            <span class="text-muted ml-auto"> · <%= p.category %></span>
+                        </div>
+                    </div>
+                    <form method="post" action="/admin/products/delete/<%= p.id %>">
+                        <button type="submit" class="btn btn-danger btn-sm">🗑️ Supprimer</button>
+                    </form>
+                </div>
+            </div>
+        <% }) %>
+    <% } else { %>
+        <div class="empty-state"><div class="empty-icon">📦</div>Aucun cheat pour le moment.</div>
+    <% } %>
+</div>
+</body>
+</html>
