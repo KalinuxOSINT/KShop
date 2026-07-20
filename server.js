@@ -23,19 +23,22 @@ const supabase = createClient(
     process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+// ========== SESSION STORE ==========
+const pg = require('pg');
+const pgPool = new pg.Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
+});
+
 // ========== MIDDLEWARE ==========
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 app.use(session({
     store: new pgSession({
-        conString: process.env.DATABASE_URL,
+        pool: pgPool,
         tableName: 'session',
-        createTableIfMissing: true,
-        pool: new (require('pg').Pool)({
-            connectionString: process.env.DATABASE_URL,
-            ssl: { rejectUnauthorized: false }
-        })
+        createTableIfMissing: true
     }),
     secret: process.env.SESSION_SECRET,
     resave: false,
