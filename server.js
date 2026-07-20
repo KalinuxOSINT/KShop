@@ -124,25 +124,33 @@ app.get('/logout', (req, res) => {
 
 app.post('/login', async (req, res) => {
     const { username, password } = req.body;
+    console.log('LOGIN attempt:', username);
+    
     const { data: user, error } = await supabase
         .from('users')
         .select('*')
         .eq('username', username)
         .single();
     
+    console.log('DB result:', user ? 'found' : 'not found', error ? error.message : '');
+    
     if (error || !user || !(await bcrypt.compare(password, user.password))) {
+        console.log('AUTH FAILED');
         return res.send('❌ Identifiants invalides. <a href="/login">Réessayer</a>');
     }
     if (user.rank === 'banned') {
         return res.send('⛔ Ce compte est banni.');
     }
+    
     req.session.userId = user.id;
     req.session.user = user;
+    console.log('SESSION set, saving...');
     req.session.save((err) => {
         if (err) {
-            console.error('Erreur sauvegarde session:', err);
+            console.error('SESSION SAVE ERROR:', err);
             return res.send('❌ Erreur de session. <a href="/login">Réessayer</a>');
         }
+        console.log('SESSION saved OK, redirecting to /');
         res.redirect('/');
     });
 });
