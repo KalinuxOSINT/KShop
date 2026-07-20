@@ -48,9 +48,16 @@ class SupabaseStore extends Store {
     async set(sid, session, callback) {
         try {
             const expire = new Date(Date.now() + (session.cookie?.maxAge || 86400000));
-            await this.supabase.from('session').upsert({ sid, sess: session, expire });
+            const { error } = await this.supabase.from('session').upsert({ sid, sess: session, expire });
+            if (error) {
+                console.error('SupabaseStore.set error:', error);
+                return callback(error);
+            }
             callback(null);
-        } catch (e) { callback(e); }
+        } catch (e) { 
+            console.error('SupabaseStore.set exception:', e);
+            callback(e); 
+        }
     }
     async destroy(sid, callback) {
         try {
