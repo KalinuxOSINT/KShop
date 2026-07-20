@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="icon" type="image/x-icon" href="/Favicon.ico">
+    <title>KaliNet - Fil d'actualité</title>
+    <style>
+        body{background:#0a0c12;color:#eee;font-family:Arial;padding:2rem;}
+        .container{max-width:800px;margin:0 auto;}
+        .post-card{background:#1a1f2e;border-radius:1rem;padding:1rem;margin-bottom:1rem;position:relative;}
+        .nav{display:flex;gap:1rem;margin-bottom:2rem;flex-wrap:wrap;}
+        .nav a{color:#00ffcc;text-decoration:none;}
+        textarea{width:100%;padding:0.5rem;background:#1e2332;border:1px solid #00ffcc;color:white;border-radius:0.5rem;}
+        button{background:#00ffcc;color:black;padding:0.5rem 1rem;border:none;border-radius:2rem;cursor:pointer;}
+        .rank-badge{font-size:0.7rem;padding:0.1rem 0.4rem;border-radius:1rem;background:#2a2e3f;}
+        .delete-btn{background:#ff4444;color:white;padding:0.2rem 0.5rem;font-size:0.7rem;border:none;border-radius:1rem;cursor:pointer;margin-left:0.5rem;}
+        .delete-btn:hover{background:#cc0000;}
+        .report-btn{background:#ffaa00;color:black;padding:0.2rem 0.5rem;font-size:0.7rem;border:none;border-radius:1rem;cursor:pointer;margin-left:0.5rem;}
+        .report-btn:hover{background:#ff8800;}
+        #unreadBadge{background:#ff4444;color:white;border-radius:50%;padding:0.1rem 0.4rem;font-size:0.7rem;margin-left:0.3rem;}
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="nav">
+        <span>👋 <%= user.username %> (<%= user.rank %>)</span>
+        <a href="https://brixhub.cc" target="_blank">🔍 BrixHub OSINT</a>
+        <a href="/messages">💬 Messages</a>
+        <a href="/profile/<%= user.id %>">👤 Mon profil</a>
+        <a href="/contact">📨 Contact</a>
+        <a href="/my-tickets">📋 Mes tickets</a>
+        <% if (user.is_admin) { %>
+            <a href="/admin/users" style="color:#ff4444;">👑 Admin</a>
+            <a href="/admin/reports" style="color:#ffaa00;">🚩 Signalements</a>
+            <a href="/admin/messages" id="adminMessagesLink" style="position:relative;">
+                📩 Messages <span id="unreadBadge">0</span>
+            </a>
+        <% } %>
+        <a href="/logout">🚪 Déconnexion</a>
+    </div>
+
+    <h2>📝 Nouveau post</h2>
+    <textarea id="postContent" rows="3" placeholder="Publie un message, un tutoriel, un hack éthique..."></textarea>
+    <button onclick="sendPost()">📤 Publier</button>
+
+    <h2>📰 Fil d'actualité</h2>
+    <% if (posts.length === 0) { %>
+        <p style="color:#ffaa00;">⚠️ Aucun post à afficher. Sois le premier à publier !</p>
+    <% } else { %>
+        <% posts.forEach(post => { %>
+            <div class="post-card" id="post-<%= post.id %>">
+                <div>
+                    <a href="/profile/<%= post.user_id %>" class="profile-link" style="color:#00ffcc; text-decoration:none;">
+                        <strong><%= post.users.username %></strong>
+                    </a>
+                    <span class="rank-badge">
+                        <% if (post.users.rank === 'admin') { %>👑
+                        <% } else if (post.users.rank === 'vip') { %>⭐
+                        <% } else if (post.users.rank === 'premium') { %>💎
+                        <% } else if (post.users.rank === 'tester') { %>🧪
+                        <% } else if (post.users.rank === 'banned') { %>🔒
+                        <% } else { %>👤<% } %>
+                    </span>
+                    <% if (user.is_admin || user.id === post.user_id) { %>
+                        <button class="delete-btn" onclick="deletePost(<%= post.id %>)">🗑️ Supprimer</button>
+                    <% } %>
+                    <% if (!user.is_admin && user.id !== post.user_id) { %>
+                        <button class="report-btn" onclick="reportPost(<%= post.id %>)">🚩 Signaler</button>
+                    <% } %>
+                </div>
+                <div style="font-size:0.8rem;"><%= new Date(post.created_at).toLocaleString() %></div>
+                <p><%= post.content %></p>
+            </div>
+        <% }) %>
+    <% } %>
+</div>
+<script>
+    async function sendPost() {
+        const content = document.getElementById('postContent').value;
+        if (!content.trim()) return alert('Message vide');
+        const res = await fetch('/api/post', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({content}) });
+        if (res.ok) location.reload();
+        else alert('Erreur');
+    }
+
+    async function deletePost(postId) {
+        if (!confirm('Supprimer ce post ?')) return;
+        const res = await fetch('/api/post/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ postId })
+        });
+        if (res.ok) {
+            document.getElementById(`post-${postId}`).remove();
+        } else {
+            alert('Erreur lors de la suppression');
+        }
+    }
+
+    async function reportPost(postId) {
+        const reason = prompt('Pourquoi signalez-vous ce post ? (max 500 caractères)');
+        if (!reason) return;
+        const res = await fetch('/api/post/report', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ postId, reason })
+        });
+        if (res.ok) {
+            alert('✅ Signalement envoyé. Merci !');
+        } else {
+            const data = await res.json();
+            alert('❌ ' + (data.error || 'Erreur'));
+        }
+    }
+
+    async function checkUnreadMessages() {
+        <% if (user.is_admin) { %>
+            const res = await fetch('/api/admin/messages/unread-count');
+            const data = await res.json();
+            const badge = document.getElementById('unreadBadge');
+            if (badge) {
+                const count = data.count || 0;
+                badge.innerText = count;
+                badge.style.display = count > 0 ? 'inline' : 'none';
+            }
+        <% } %>
+    }
+    setInterval(checkUnreadMessages, 30000);
+    checkUnreadMessages();
+</script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="icon" type="image/x-icon" href="/Favicon.ico">
+    <title>KaliNet - Contact</title>
+    <style>
+        body{background:#0a0c12;color:#eee;font-family:Arial;padding:2rem;}
+        .container{max-width:600px;margin:0 auto;background:#1a1f2e;padding:2rem;border-radius:1rem;}
+        input,textarea{width:100%;padding:0.5rem;margin-bottom:1rem;background:#1e2332;border:1px solid #00ffcc;color:white;border-radius:0.5rem;}
+        button{background:#00ffcc;color:black;padding:0.5rem 1rem;border:none;border-radius:2rem;cursor:pointer;}
+        .nav a{color:#00ffcc;text-decoration:none;margin-right:1rem;}
+        .result{margin-top:1rem;}
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="nav">
+        <a href="/">🏠 Accueil</a>
+        <a href="/my-tickets">📋 Mes tickets</a>
+    </div>
+    <h1>📨 Contacter le support</h1>
+    <form id="contactForm">
+        <input type="text" id="subject" placeholder="Sujet" required>
+        <textarea id="message" rows="5" placeholder="Votre message..." required></textarea>
+        <button type="submit">Envoyer</button>
+    </form>
+    <div id="result" class="result"></div>
+</div>
+<script>
+    document.getElementById('contactForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const subject = document.getElementById('subject').value;
+        const message = document.getElementById('message').value;
+        const res = await fetch('/api/contact', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ subject, message })
+        });
+        if (res.ok) {
+            document.getElementById('result').innerHTML = '<p style="color:#00ffcc;">✅ Message envoyé !</p>';
+            document.getElementById('contactForm').reset();
+        } else {
+            document.getElementById('result').innerHTML = '<p style="color:#ff4444;">❌ Erreur</p>';
+        }
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="icon" type="image/x-icon" href="/Favicon.ico">
+    <title>KaliNet - Messages</title>
+    <style>
+        body{background:#0a0c12;color:#eee;font-family:Arial;padding:2rem;}
+        .container{max-width:1200px;margin:0 auto;display:flex;gap:2rem;}
+        .sidebar{width:300px;background:#1a1f2e;border-radius:1rem;padding:1rem;}
+        .chat{flex:1;background:#1a1f2e;border-radius:1rem;padding:1rem;display:flex;flex-direction:column;height:70vh;}
+        .messages{flex:1;overflow-y:auto;margin-bottom:1rem;}
+        .message{padding:0.5rem;margin:0.5rem 0;border-radius:1rem;}
+        .message.sent{background:#00ffcc22;text-align:right;}
+        .message.received{background:#2a2e3f;}
+        .conversation{padding:0.5rem;cursor:pointer;border-radius:0.5rem;margin-bottom:0.5rem;}
+        .conversation:hover{background:#2a2e3f;}
+        .unread{background:#ff4444;color:white;border-radius:1rem;padding:0.1rem 0.4rem;font-size:0.7rem;margin-left:0.5rem;}
+        .input-area{display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;}
+        textarea{flex:1;padding:0.5rem;background:#1e2332;border:1px solid #00ffcc;color:white;border-radius:0.5rem;resize:none;}
+        button{background:#00ffcc;color:black;padding:0.5rem 1rem;border:none;border-radius:2rem;cursor:pointer;}
+        .nav a{color:#00ffcc;text-decoration:none;margin-right:1rem;}
+        .rank-badge{font-size:1rem;margin-right:0.3rem;}
+        .file-btn{background:#00aaff;margin-left:0.5rem;}
+        .pin-btn{background:#ffaa00;}
+        .reset-btn{background:#ff4444;color:white;}
+        .locked{background:#222;padding:1rem;border-radius:1rem;text-align:center;}
+        .banned-user{text-decoration:line-through;color:#ff4444;}
+        #unreadBadge{background:#ff4444;color:white;border-radius:50%;padding:0.1rem 0.4rem;font-size:0.7rem;margin-left:0.3rem;}
+        .chat-controls{display:flex;gap:0.5rem;margin-bottom:0.5rem;flex-wrap:wrap;}
+        .chat-controls button{font-size:0.8rem;padding:0.3rem 0.8rem;}
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="sidebar">
+        <div class="nav">
+            <a href="/">← Retour</a>
+            <% if (user.is_admin) { %>
+                <a href="/admin/messages" id="adminMessagesLink" style="position:relative;">
+                    📩 Messages <span id="unreadBadge">0</span>
+                </a>
+            <% } %>
+        </div>
+        <h3>💬 Conversations</h3>
+        <div id="conversationsList">
+            <% conversations.forEach(c => { %>
+                <div class="conversation" onclick="loadChat(<%= c.id %>)" data-id="<%= c.id %>">
+                    <span class="rank-badge">
+                        <% if (c.rank === 'admin') { %>👑
+                        <% } else if (c.rank === 'vip') { %>⭐
+                        <% } else if (c.rank === 'premium') { %>💎
+                        <% } else if (c.rank === 'tester') { %>🧪
+                        <% } else if (c.rank === 'banned') { %>🔒
+                        <% } else { %>👤<% } %>
+                    </span>
+                    <strong class="<% if (c.rank === 'banned') { %>banned-user<% } %>">
+                        <%= c.username %>
+                    </strong>
+                    <% if (c.unread > 0) { %><span class="unread"><%= c.unread %></span><% } %>
+                    <div style="font-size:0.7rem;"><%= c.last_message ? c.last_message.substring(0,50) : 'Nouvelle conversation' %></div>
+                </div>
+            <% }) %>
+        </div>
+    </div>
+    <div class="chat">
+        <div id="chatHeader"><h3>Sélectionne une conversation</h3></div>
+        <div class="chat-controls" id="chatControls" style="display:none;">
+            <button class="pin-btn" onclick="setPin()">🔒 Définir un PIN</button>
+            <button class="reset-btn" onclick="requestReset()">🔄 Demander réinitialisation</button>
+            <button onclick="approveReset()">✅ Approuver réinitialisation</button>
+        </div>
+        <div class="messages" id="messagesContainer"></div>
+        <div class="input-area">
+            <textarea id="messageInput" rows="2" placeholder="Écris ton message..."></textarea>
+            <input type="file" id="fileInput" style="display:none;">
+            <button class="file-btn" onclick="document.getElementById('fileInput').click()">📎 Joindre</button>
+            <button onclick="sendMessage()">📤 Envoyer</button>
+        </div>
+    </div>
+</div>
+<script>
+    // ========== ÉTAT GLOBAL ==========
+    let currentUserId = null;
+    let currentConversationId = null;
+    if (!window.unlocked) window.unlocked = [];
+
+    // ========== FONCTIONS PIN ==========
+    function getConvKey(userA, userB) {
+        return Math.min(userA, userB) + '-' + Math.max(userA, userB);
+    }
+
+    async function checkPin(userId) {
+        const res = await fetch('/api/conversation/has-pin/' + userId);
+        return res.json();
+    }
+
+    async function unlockConversation(userId, pin) {
+        const res = await fetch('/api/conversation/verify-pin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ otherId: userId, pin })
+        });
+        return res.json();
+    }
+
+    async function setPin() {
+        if (!currentUserId) return alert('Choisis une conversation');
+        const pin = prompt('Entrez un nouveau code PIN (4 chiffres minimum) :');
+        if (!pin || pin.length < 4) return alert('Le PIN doit contenir au moins 4 chiffres.');
+        if (!/^\d+$/.test(pin)) return alert('Le PIN doit contenir uniquement des chiffres.');
+        const res = await fetch('/api/conversation/set-pin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ otherId: currentUserId, pin })
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert('✅ PIN défini avec succès !');
+        } else {
+            alert('❌ Erreur : ' + (data.error || ''));
+        }
+    }
+
+    async function requestReset() {
+        if (!currentUserId) return alert('Choisis une conversation');
+        if (!confirm('Demander la réinitialisation du PIN à l\'autre utilisateur ?')) return;
+        const res = await fetch('/api/conversation/request-reset', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ otherId: currentUserId })
+        });
+        const data = await res.json();
+        alert(data.success ? '✅ Demande envoyée. Attendez que l\'autre utilisateur approuve.' : '❌ Erreur : ' + (data.error || ''));
+    }
+
+    async function approveReset() {
+        if (!currentUserId) return alert('Choisis une conversation');
+        if (!confirm('Approuver la réinitialisation du PIN pour cette conversation ?')) return;
+        const res = await fetch('/api/conversation/approve-reset', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ otherId: currentUserId })
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert('✅ Réinitialisation approuvée. Le PIN a été supprimé.');
+            // Retirer le déverrouillage
+            const key = getConvKey(<%= user.id %>, currentUserId);
+            window.unlocked = window.unlocked.filter(k => k !== key);
+            // Recharger la conversation
+            loadChat(currentUserId);
+        } else {
+            alert('❌ Erreur : ' + (data.error || ''));
+        }
+    }
+
+    // ========== CHARGEMENT DES MESSAGES AVEC PIN ==========
+    async function loadChat(userId) {
+        currentUserId = userId;
+        currentConversationId = userId;
+        const convKey = getConvKey(<%= user.id %>, userId);
+        
+        // Afficher les contrôles PIN
+        document.getElementById('chatControls').style.display = 'flex';
+        
+        // Vérifier si déjà déverrouillé
+        if (window.unlocked.includes(convKey)) {
+            await fetchMessages(userId);
+            return;
+        }
+        
+        // Vérifier si un PIN existe
+        const { hasPin } = await checkPin(userId);
+        if (hasPin) {
+            const pin = prompt('🔒 Cette conversation est protégée par un PIN. Entrez le code :');
+            if (pin === null) return; // annulé
+            const result = await unlockConversation(userId, pin);
+            if (result.success) {
+                window.unlocked.push(convKey);
+                await fetchMessages(userId);
+            } else {
+                alert('❌ PIN incorrect ou erreur : ' + (result.error || ''));
+            }
+        } else {
+            // Pas de PIN, charger directement
+            await fetchMessages(userId);
+        }
+    }
+
+    // ========== RÉCUPÉRATION ET AFFICHAGE DES MESSAGES ==========
+    async function fetchMessages(userId) {
+        const res = await fetch('/api/messages/' + userId);
+        const messages = await res.json();
+        const container = document.getElementById('messagesContainer');
+        
+        if (!messages || messages.length === 0) {
+            container.innerHTML = '<p style="color:#888;text-align:center;padding:2rem;">Aucun message. Envoyez-en un !</p>';
+            document.getElementById('chatHeader').innerHTML = `<h3>💬 Nouvelle conversation</h3>`;
+            return;
+        }
+        
+        container.innerHTML = messages.map(m => {
+            let content = escapeHtml(m.content);
+            // Détecter les liens de fichiers
+            if (content.includes('/storage/v1/object/public/')) {
+                const fileMatch = content.match(/(https?:\/\/[^\s]+)/);
+                if (fileMatch) {
+                    content = `📎 <a href="${fileMatch[0]}" target="_blank" class="file-link">Voir le fichier</a>`;
+                }
+            }
+            return `
+                <div class="message ${m.sender_id == <%= user.id %> ? 'sent' : 'received'}">
+                    <a href="/profile/${m.sender_id}" style="text-decoration:none;color:#00ffcc;">
+                        <strong>${m.sender_id == <%= user.id %> ? 'Moi' : escapeHtml(m.username)}</strong>
+                    </a><br>
+                    ${content}<br>
+                    <small>${new Date(m.created_at).toLocaleString()}</small>
+                </div>
+            `;
+        }).join('');
+        
+        document.getElementById('chatHeader').innerHTML = `<h3>💬 Conversation</h3>`;
+        container.scrollTop = container.scrollHeight;
+    }
+
+    // ========== ENVOI DE MESSAGE ==========
+    async function sendMessage() {
+        if (!currentUserId) return alert('Choisis une conversation');
+        const convKey = getConvKey(<%= user.id %>, currentUserId);
+        if (!window.unlocked.includes(convKey)) {
+            alert('🔒 Cette conversation est verrouillée. Entrez le PIN d\'abord.');
+            return;
+        }
+        
+        const content = document.getElementById('messageInput').value;
+        if (!content.trim()) return;
+        const res = await fetch('/api/messages/send', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({ receiver_id: currentUserId, content })
+        });
+        if (res.ok) {
+            document.getElementById('messageInput').value = '';
+            fetchMessages(currentUserId);
+        } else {
+            alert('Erreur lors de l\'envoi');
+        }
+    }
+
+    // ========== UPLOAD DE FICHIER ==========
+    document.getElementById('fileInput').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        if (!currentUserId) return alert('Choisis une conversation d\'abord');
+        
+        const convKey = getConvKey(<%= user.id %>, currentUserId);
+        if (!window.unlocked.includes(convKey)) {
+            alert('🔒 Cette conversation est verrouillée. Entrez le PIN d\'abord.');
+            return;
+        }
+        
+        if (file.size > 10 * 1024 * 1024) return alert('Fichier trop gros (max 10MB)');
+        
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('receiver_id', currentUserId);
+        
+        const res = await fetch('/api/messages/upload', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (res.ok) {
+            fetchMessages(currentUserId);
+        } else {
+            const error = await res.json();
+            alert('Erreur: ' + (error.error || 'Upload échoué'));
+        }
+        document.getElementById('fileInput').value = '';
+    });
+
+    // ========== UTILITAIRES ==========
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
+    }
+
+    async function checkUnreadMessages() {
+        <% if (user.is_admin) { %>
+            const res = await fetch('/api/admin/messages/unread-count');
+            const data = await res.json();
+            const badge = document.getElementById('unreadBadge');
+            if (badge) {
+                const count = data.count || 0;
+                badge.innerText = count;
+                badge.style.display = count > 0 ? 'inline' : 'none';
+            }
+        <% } %>
+    }
+
+    // ========== RAFRAÎCHISSEMENT AUTOMATIQUE ==========
+    setInterval(() => {
+        if (currentUserId) {
+            const convKey = getConvKey(<%= user.id %>, currentUserId);
+            if (window.unlocked.includes(convKey)) {
+                fetchMessages(currentUserId);
+            }
+        }
+    }, 5000);
+
+    setInterval(checkUnreadMessages, 30000);
+    checkUnreadMessages();
+</script>
+</body>
+</html>
