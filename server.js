@@ -17,6 +17,69 @@ if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL manquant');
 const app = express();
 const PORT = process.env.PORT || 8080;
 
+app.set('trust proxy', 1);
+
+// ========== PROTECTION DDOS / RATE LIMITING ==========
+const rateLimit = new Map();
+const RATE_WINDOW = 60 * 1000; // 1 minute
+const RATE_MAX    = 120;        // max 120 requêtes par minute par IP
+const RATE_BAN    = 10 * 60 * 1000; // ban 10 min si dépassé
+const bannedIPs   = new Map();
+
+app.use((req, res, next) => {
+    const ip = req.ip || req.connection.remoteAddress;
+    const now = Date.now();
+
+    // IP bannie ?
+    if (bannedIPs.has(ip)) {
+        const until = bannedIPs.get(ip);
+        if (now < until) {
+            return res.status(429).send('Trop de requêtes. Réessaie plus tard.');
+        }
+        bannedIPs.delete(ip);
+    }
+
+    // Compteur de requêtes
+    if (!rateLimit.has(ip)) {
+        rateLimit.set(ip, { count: 1, start: now });
+    } else {
+        const entry = rateLimit.get(ip);
+        if (now - entry.start > RATE_WINDOW) {
+            entry.count = 1;
+            entry.start = now;
+        } else {
+            entry.count++;
+            if (entry.count > RATE_MAX) {
+                bannedIPs.set(ip, now + RATE_BAN);
+                rateLimit.delete(ip);
+                console.warn(`[DDoS] IP bannie temporairement : ${ip}`);
+                return res.status(429).send('Trop de requêtes. Réessaie dans 10 minutes.');
+            }
+        }
+    }
+    next();
+});
+
+// ========== LISTE NOIRE DE PSEUDOS ==========
+const BANNED_USERNAMES = ['wazroshh', 'mq2b'];
+
+// Supprimer les comptes bannis au démarrage
+async function deleteBannedUsers() {
+    for (const username of BANNED_USERNAMES) {
+        const { data } = await supabase
+            .from('users')
+            .select('id, username')
+            .ilike('username', `%${username}%`);
+        if (data && data.length > 0) {
+            for (const user of data) {
+                await supabase.from('users').delete().eq('id', user.id);
+                console.log(`[BANNED] Compte supprimé : ${user.username}`);
+            }
+        }
+    }
+}
+deleteBannedUsers();
+
 // ========== SUPABASE CLIENT ==========
 const supabase = createClient(
     process.env.SUPABASE_URL,
@@ -158,6 +221,11 @@ app.post('/login', async (req, res) => {
 
 app.post('/register', async (req, res) => {
     const { username, password } = req.body;
+
+    // Vérifier pseudo interdit
+    const isBanned = BANNED_USERNAMES.some(b => username.toLowerCase().includes(b.toLowerCase()));
+    if (isBanned) return res.send('❌ Ce pseudo n\'est pas autorisé.');
+
     const hashedPassword = await bcrypt.hash(password, 10);
     const { error } = await supabase
         .from('users')
