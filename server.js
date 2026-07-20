@@ -600,6 +600,321 @@ app.post('/api/conversation/approve-reset', requireAuth, async (req, res) => {
     res.json({ success: true });
 });
 
+// ========== SERVEURS ==========
+
+// Liste de tous les serveurs
+app.get('/servers', requireAuth, async (req, res) => {
+    const { data: allServers } = await supabase
+        .from('servers')
+        .select('*, users!servers_owner_id_fkey(username)')
+        .order('created_at', { ascending: false });
+
+    const { data: myMemberships } = await supabase
+        .from('server_members')
+        .select('server_id')
+        .eq('user_id', req.session.userId);
+
+    const myServerIds = (myMemberships || []).map(m => m.server_id);
+
+    const servers = (allServers || []).map(s => ({
+        ...s,
+        owner_username: s.users?.username,
+        is_member: myServerIds.includes(s.id),
+        is_owner: s.owner_id === req.session.userId
+    }));
+
+    res.render('servers', { user: req.session.user, servers });
+});
+
+// Créer un serveur
+app.post('/api/servers/create', requireAuth, async (req, res) => {
+    const { name, description, icon } = req.body;
+    if (!name || name.length > 100) return res.status(400).json({ error: 'Nom invalide' });
+
+    const { data: server, error } = await supabase
+        .from('servers')
+        .insert({ name, description: description || '', icon: icon || '🌐', owner_id: req.session.userId })
+        .select()
+        .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    // Owner devient automatiquement membre
+    await supabase.from('server_members').insert({ server_id: server.id, user_id: req.session.userId });
+
+    // Créer salon #général par défaut
+    await supabase.from('server_channels').insert({ server_id: server.id, name: 'général', position: 0 });
+
+    // Créer rôle @everyone par défaut
+    await supabase.from('server_roles').insert({ server_id: server.id, name: 'Membre', color: '#94a3b8', position: 0 });
+
+    res.json({ success: true, serverId: server.id });
+});
+
+// Rejoindre un serveur
+app.post('/api/servers/:id/join', requireAuth, async (req, res) => {
+    const serverId = parseInt(req.params.id);
+    const { error } = await supabase
+        .from('server_members')
+        .insert({ server_id: serverId, user_id: req.session.userId });
+    if (error) return res.status(400).json({ error: 'Déjà membre ou serveur introuvable' });
+    res.json({ success: true });
+});
+
+// Quitter un serveur
+app.post('/api/servers/:id/leave', requireAuth, async (req, res) => {
+    const serverId = parseInt(req.params.id);
+    const { data: server } = await supabase.from('servers').select('owner_id').eq('id', serverId).single();
+    if (server?.owner_id === req.session.userId) return res.status(400).json({ error: 'Le propriétaire ne peut pas quitter son serveur' });
+    await supabase.from('server_members').delete().eq('server_id', serverId).eq('user_id', req.session.userId);
+    res.json({ success: true });
+});
+
+// Supprimer un serveur (owner only)
+app.post('/api/servers/:id/delete', requireAuth, async (req, res) => {
+    const serverId = parseInt(req.params.id);
+    const { data: server } = await supabase.from('servers').select('owner_id').eq('id', serverId).single();
+    if (!server || (server.owner_id !== req.session.userId && !req.session.user?.is_admin)) {
+        return res.status(403).json({ error: 'Non autorisé' });
+    }
+    await supabase.from('servers').delete().eq('id', serverId);
+    res.json({ success: true });
+});
+
+// Page intérieure d'un serveur
+app.get('/servers/:id', requireAuth, async (req, res) => {
+    const serverId = parseInt(req.params.id);
+
+    const { data: server } = await supabase
+        .from('servers')
+        .select('*, users!servers_owner_id_fkey(username)')
+        .eq('id', serverId)
+        .single();
+
+    if (!server) return res.status(404).send('Serveur introuvable');
+
+    // Vérifier si membre
+    const { data: membership } = await supabase
+        .from('server_members')
+        .select('id')
+        .eq('server_id', serverId)
+        .eq('user_id', req.session.userId)
+        .single();
+
+    if (!membership) return res.redirect('/servers');
+
+    // Salons
+    const { data: channels } = await supabase
+        .from('server_channels')
+        .select('*')
+        .eq('server_id', serverId)
+        .order('position');
+
+    // Membres avec leurs rôles
+    const { data: members } = await supabase
+        .from('server_members')
+        .select('user_id, users(id, username, rank)')
+        .eq('server_id', serverId);
+
+    // Rôles du serveur
+    const { data: roles } = await supabase
+        .from('server_roles')
+        .select('*')
+        .eq('server_id', serverId)
+        .order('position', { ascending: false });
+
+    // Rôles assignés
+    const { data: memberRoles } = await supabase
+        .from('server_member_roles')
+        .select('user_id, role_id, server_roles(name, color)')
+        .eq('server_id', serverId);
+
+    // Grouper les rôles par user
+    const rolesByUser = {};
+    for (const mr of (memberRoles || [])) {
+        if (!rolesByUser[mr.user_id]) rolesByUser[mr.user_id] = [];
+        rolesByUser[mr.user_id].push({ id: mr.role_id, name: mr.server_roles?.name, color: mr.server_roles?.color });
+    }
+
+    const formattedMembers = (members || []).map(m => ({
+        id: m.user_id,
+        username: m.users?.username,
+        rank: m.users?.rank,
+        roles: rolesByUser[m.user_id] || []
+    }));
+
+    // Canal actif (premier par défaut)
+    const activeChannelId = parseInt(req.query.channel) || channels?.[0]?.id;
+    let messages = [];
+    if (activeChannelId) {
+        const { data: msgs } = await supabase
+            .from('channel_messages')
+            .select('*, users(username, rank)')
+            .eq('channel_id', activeChannelId)
+            .order('created_at', { ascending: true })
+            .limit(100);
+        messages = (msgs || []).map(m => ({
+            ...m,
+            username: m.users?.username,
+            user_rank: m.users?.rank,
+            user_roles: rolesByUser[m.user_id] || []
+        }));
+    }
+
+    res.render('server', {
+        user: req.session.user,
+        server: { ...server, owner_username: server.users?.username },
+        channels: channels || [],
+        members: formattedMembers,
+        roles: roles || [],
+        activeChannelId,
+        messages,
+        isOwner: server.owner_id === req.session.userId
+    });
+});
+
+// Envoyer un message dans un salon
+app.post('/api/channels/:id/messages', requireAuth, async (req, res) => {
+    const channelId = parseInt(req.params.id);
+    const { content } = req.body;
+    if (!content || content.length > 2000) return res.status(400).json({ error: 'Message invalide' });
+
+    // Vérifier que l'user est membre du serveur de ce salon
+    const { data: channel } = await supabase.from('server_channels').select('server_id').eq('id', channelId).single();
+    if (!channel) return res.status(404).json({ error: 'Salon introuvable' });
+
+    const { data: membership } = await supabase.from('server_members')
+        .select('id').eq('server_id', channel.server_id).eq('user_id', req.session.userId).single();
+    if (!membership) return res.status(403).json({ error: 'Non membre' });
+
+    const { data: msg, error } = await supabase
+        .from('channel_messages')
+        .insert({ channel_id: channelId, user_id: req.session.userId, content })
+        .select('*, users(username, rank)')
+        .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true, message: { ...msg, username: msg.users?.username, user_rank: msg.users?.rank } });
+});
+
+// Récupérer les messages d'un salon (polling)
+app.get('/api/channels/:id/messages', requireAuth, async (req, res) => {
+    const channelId = parseInt(req.params.id);
+    const after = req.query.after;
+
+    const { data: channel } = await supabase.from('server_channels').select('server_id').eq('id', channelId).single();
+    if (!channel) return res.status(404).json({ error: 'Salon introuvable' });
+
+    const { data: membership } = await supabase.from('server_members')
+        .select('id').eq('server_id', channel.server_id).eq('user_id', req.session.userId).single();
+    if (!membership) return res.status(403).json({ error: 'Non membre' });
+
+    let query = supabase.from('channel_messages').select('*, users(username, rank)')
+        .eq('channel_id', channelId).order('created_at', { ascending: true }).limit(100);
+    if (after) query = query.gt('id', after);
+
+    const { data: msgs } = await query;
+    res.json((msgs || []).map(m => ({ ...m, username: m.users?.username, user_rank: m.users?.rank })));
+});
+
+// Créer un salon (owner only)
+app.post('/api/servers/:id/channels', requireAuth, async (req, res) => {
+    const serverId = parseInt(req.params.id);
+    const { name } = req.body;
+    if (!name) return res.status(400).json({ error: 'Nom requis' });
+
+    const { data: server } = await supabase.from('servers').select('owner_id').eq('id', serverId).single();
+    if (!server || server.owner_id !== req.session.userId) return res.status(403).json({ error: 'Non autorisé' });
+
+    const { data: channel, error } = await supabase.from('server_channels')
+        .insert({ server_id: serverId, name: name.toLowerCase().replace(/\s+/g, '-') })
+        .select().single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true, channel });
+});
+
+// Supprimer un salon (owner only)
+app.post('/api/channels/:id/delete', requireAuth, async (req, res) => {
+    const channelId = parseInt(req.params.id);
+    const { data: channel } = await supabase.from('server_channels').select('server_id').eq('id', channelId).single();
+    if (!channel) return res.status(404).json({ error: 'Introuvable' });
+    const { data: server } = await supabase.from('servers').select('owner_id').eq('id', channel.server_id).single();
+    if (!server || server.owner_id !== req.session.userId) return res.status(403).json({ error: 'Non autorisé' });
+    await supabase.from('server_channels').delete().eq('id', channelId);
+    res.json({ success: true });
+});
+
+// Créer un rôle (owner only)
+app.post('/api/servers/:id/roles', requireAuth, async (req, res) => {
+    const serverId = parseInt(req.params.id);
+    const { name, color } = req.body;
+    if (!name) return res.status(400).json({ error: 'Nom requis' });
+
+    const { data: server } = await supabase.from('servers').select('owner_id').eq('id', serverId).single();
+    if (!server || server.owner_id !== req.session.userId) return res.status(403).json({ error: 'Non autorisé' });
+
+    const { data: role, error } = await supabase.from('server_roles')
+        .insert({ server_id: serverId, name, color: color || '#94a3b8' })
+        .select().single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true, role });
+});
+
+// Supprimer un rôle (owner only)
+app.post('/api/roles/:id/delete', requireAuth, async (req, res) => {
+    const roleId = parseInt(req.params.id);
+    const { data: role } = await supabase.from('server_roles').select('server_id').eq('id', roleId).single();
+    if (!role) return res.status(404).json({ error: 'Introuvable' });
+    const { data: server } = await supabase.from('servers').select('owner_id').eq('id', role.server_id).single();
+    if (!server || server.owner_id !== req.session.userId) return res.status(403).json({ error: 'Non autorisé' });
+    await supabase.from('server_roles').delete().eq('id', roleId);
+    res.json({ success: true });
+});
+
+// Assigner un rôle à un membre (owner only)
+app.post('/api/servers/:id/members/:userId/roles', requireAuth, async (req, res) => {
+    const serverId = parseInt(req.params.id);
+    const targetUserId = parseInt(req.params.userId);
+    const { roleId } = req.body;
+
+    const { data: server } = await supabase.from('servers').select('owner_id').eq('id', serverId).single();
+    if (!server || server.owner_id !== req.session.userId) return res.status(403).json({ error: 'Non autorisé' });
+
+    const { error } = await supabase.from('server_member_roles')
+        .insert({ server_id: serverId, user_id: targetUserId, role_id: roleId });
+    if (error) return res.status(400).json({ error: 'Rôle déjà assigné ou invalide' });
+    res.json({ success: true });
+});
+
+// Retirer un rôle à un membre (owner only)
+app.post('/api/servers/:id/members/:userId/roles/remove', requireAuth, async (req, res) => {
+    const serverId = parseInt(req.params.id);
+    const targetUserId = parseInt(req.params.userId);
+    const { roleId } = req.body;
+
+    const { data: server } = await supabase.from('servers').select('owner_id').eq('id', serverId).single();
+    if (!server || server.owner_id !== req.session.userId) return res.status(403).json({ error: 'Non autorisé' });
+
+    await supabase.from('server_member_roles')
+        .delete().eq('server_id', serverId).eq('user_id', targetUserId).eq('role_id', roleId);
+    res.json({ success: true });
+});
+
+// Expulser un membre (owner only)
+app.post('/api/servers/:id/members/:userId/kick', requireAuth, async (req, res) => {
+    const serverId = parseInt(req.params.id);
+    const targetUserId = parseInt(req.params.userId);
+
+    const { data: server } = await supabase.from('servers').select('owner_id').eq('id', serverId).single();
+    if (!server || server.owner_id !== req.session.userId) return res.status(403).json({ error: 'Non autorisé' });
+    if (targetUserId === req.session.userId) return res.status(400).json({ error: 'Impossible de s\'expulser soi-même' });
+
+    await supabase.from('server_members').delete().eq('server_id', serverId).eq('user_id', targetUserId);
+    res.json({ success: true });
+});
+
 // ========== DÉMARRAGE ==========
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ KaliNet sur http://0.0.0.0:${PORT}`);
